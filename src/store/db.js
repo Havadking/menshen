@@ -269,7 +269,7 @@ export class Store {
       WHERE s.ended_at IS NULL OR s.ended_at >= ? OR s.started_at >= ?`).get(todayStartMs, todayStartMs).n;
     const joins = this.db.prepare(`SELECT COUNT(*) AS n FROM sessions WHERE started_at >= ?`).get(todayStartMs).n;
     const leaves = this.db.prepare(`SELECT COUNT(*) AS n FROM sessions WHERE ended_at >= ?`).get(todayStartMs).n;
-    const online = this.db.prepare(`SELECT COUNT(*) AS n FROM devices WHERE is_online = 1`).get().n;
+    const online = this.db.prepare(`SELECT COUNT(DISTINCT COALESCE(canonical_mac, mac)) AS n FROM devices WHERE is_online = 1`).get().n;
     return { online, devicesToday: devices, joinsToday: joins, leavesToday: leaves, eventsToday: joins + leaves };
   }
 

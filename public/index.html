@@ -207,7 +207,7 @@
 
   <!-- 指标 -->
   <section class="stats">
-    <div class="stat"><div class="lbl">在线设备</div><div class="val mono">{{ devices.length }}</div><div class="sub">{{ pendingCount ? pendingCount + ' 台离线确认中' : '全部稳定在线' }}</div></div>
+    <div class="stat"><div class="lbl">在线设备</div><div class="val mono">{{ logicalDevices.length }}</div><div class="sub">{{ pendingCount ? pendingCount + ' 台离线确认中' : '全部稳定在线' }}</div></div>
     <div class="stat"><div class="lbl">今日出现</div><div class="val mono">{{ stats.devicesToday ?? '–' }}</div><div class="sub">{{ randomCount ? '含 ' + randomCount + ' 个随机 MAC' : '按合并后的设备计' }}</div></div>
     <div class="stat"><div class="lbl">今日事件</div><div class="val mono">{{ stats.eventsToday ?? '–' }}</div><div class="sub">{{ stats.joinsToday ?? 0 }} 次上线 · {{ stats.leavesToday ?? 0 }} 次离开</div></div>
     <div class="stat"><div class="lbl">最近变化</div><div class="val mono">{{ lastEvent ? fmtTime(lastEvent.at) : '–' }}</div><div class="sub">{{ lastEvent ? lastEvent.name + (lastEvent.type === 'JOIN' ? ' 已连入' : ' 已离开') : '暂无事件' }}</div></div>
@@ -239,7 +239,7 @@
           <div class="row" :class="{pending: d.pendingLeave, hl: highlight === d.mac}" :id="'dev-' + d.mac" @click="openDrawer(d.mac)">
             <div class="dot" :class="{pending: d.pendingLeave}"></div>
             <div style="min-width:0">
-              <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span><span v-if="d.canonicalMac" class="tag">合并</span></div>
+              <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span><span v-if="d.merged" class="tag" title="多个 MAC 已合并为一台设备">合并</span></div>
               <div class="sub" :style="d.pendingLeave ? 'color: var(--amber)' : ''">{{ d.pendingLeave ? '离线确认中 · ' + pendingLeft(d) + 's' : (d.routerName && d.routerName !== d.name ? d.routerName : (d.customName ? d.routerName || '' : '')) }}</div>
             </div>
             <div class="mono num">{{ d.ip || '—' }}</div>
@@ -262,7 +262,7 @@
             </div>
           </div>
         </template>
-        <div v-if="!filteredDevices.length" class="empty">{{ devices.length ? '没有匹配的设备' : (connected ? '当前没有在线设备' : '等待连接…') }}</div>
+        <div v-if="!filteredDevices.length" class="empty">{{ logicalDevices.length ? '没有匹配的设备' : (connected ? '当前没有在线设备' : '等待连接…') }}</div>
 
         <!-- 离线设备 -->
         <template v-if="filteredOffline.length">
@@ -282,7 +282,7 @@
             <div class="row off" @click="openDrawer(d.mac)">
               <div class="dot off"></div>
               <div style="min-width:0">
-                <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span><span v-if="d.canonicalMac" class="tag">合并</span></div>
+                <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span><span v-if="d.merged" class="tag" title="多个 MAC 已合并为一台设备">合并</span></div>
                 <div class="sub">{{ d.routerName && d.routerName !== d.name ? d.routerName : '' }}</div>
               </div>
               <div class="mono num">{{ d.lastIp || '—' }}</div>
@@ -358,6 +358,10 @@
           <span class="k">连接</span><span>{{ fmtConn(drawer.connType) }}<template v-if="drawerParent"> · 经 {{ drawerParent }} 接入</template></span>
           <span class="k">首次出现</span><span class="mono">{{ fmtDateTime(drawer.firstSeenAt) }}</span>
           <span class="k">最近出现</span><span class="mono">{{ fmtDateTime(drawer.lastSeenAt) }}</span>
+          <template v-if="drawerMembers.length">
+            <span class="k">同一设备</span>
+            <span><div v-for="m in drawerMembers" :key="m.mac" class="mono" style="cursor:pointer" :title="m.canonicalMac ? '合并到本设备' : '本设备合并到它'" @click="openDrawer(m.mac)">{{ m.mac }} <span class="sub">{{ m.isOnline ? '在线' : '离线 ' + fmtAgo(m.lastSeenAt) }}</span></div></span>
+          </template>
         </div>
         <div class="field">
           <label>自定义名称</label>
@@ -465,8 +469,43 @@ createApp({
     };
 
     // ---------- 派生 ----------
-    const pendingCount = computed(() => devices.value.filter((d) => d.pendingLeave).length);
-    const randomCount = computed(() => devices.value.filter((d) => d.isRandomMac).length);
+    // 逻辑设备：合并到同一目标的多个 MAC 折叠成一行。在线优先取非「离线确认中」的成员；
+    // 全部成员离线时才进入离线区，取最近出现的那个。
+    const logicalKey = (d) => d.canonicalMac || d.mac;
+    const memberCounts = computed(() => {
+      const m = new Map();
+      for (const d of [...devices.value, ...offline.value]) m.set(logicalKey(d), (m.get(logicalKey(d)) || 0) + 1);
+      return m;
+    });
+    const logicalDevices = computed(() => {
+      const groups = new Map();
+      for (const d of devices.value) {
+        const k = logicalKey(d);
+        const g = groups.get(k);
+        if (!g) groups.set(k, { primary: d, members: [d] });
+        else { g.members.push(d); if (g.primary.pendingLeave && !d.pendingLeave) g.primary = d; }
+      }
+      return [...groups.values()].map(({ primary, members }) => ({
+        ...primary,
+        key: logicalKey(primary),
+        merged: (memberCounts.value.get(logicalKey(primary)) || 1) > 1,
+        members: members.map((d) => d.mac),
+      }));
+    });
+    const logicalOffline = computed(() => {
+      const onlineKeys = new Set(devices.value.map(logicalKey));
+      const seen = new Set();
+      const out = [];
+      for (const d of offline.value) {
+        const k = logicalKey(d);
+        if (onlineKeys.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        out.push({ ...d, key: k, merged: (memberCounts.value.get(k) || 1) > 1 });
+      }
+      return out;
+    });
+    const pendingCount = computed(() => logicalDevices.value.filter((d) => d.pendingLeave).length);
+    const randomCount = computed(() => logicalDevices.value.filter((d) => d.isRandomMac).length);
     const lastEvent = computed(() => events.value.find((e) => e.type !== 'SYSTEM'));
     const statusPill = computed(() => {
       if (!connected.value) return { cls: 'bad', dot: 'off', text: '已断开，重连中…', extra: '' };
@@ -476,8 +515,8 @@ createApp({
     });
     const filteredDevices = computed(() => {
       const q = query.value.toLowerCase();
-      let list = devices.value;
-      if (q) list = list.filter((d) => [d.name, d.routerName, d.ip, d.mac].some((v) => v && String(v).toLowerCase().includes(q)));
+      let list = logicalDevices.value;
+      if (q) list = list.filter((d) => [d.name, d.routerName, d.ip, ...d.members].some((v) => v && String(v).toLowerCase().includes(q)));
       const { key, dir } = sort;
       const m = dir === 'asc' ? 1 : -1;
       return [...list].sort((a, b) => {
@@ -490,10 +529,15 @@ createApp({
     const ipNum = (ip) => (ip || '').split('.').reduce((n, o) => n * 256 + (Number(o) || 0), 0);
     const filteredOffline = computed(() => {
       const q = query.value.toLowerCase();
-      if (!q) return offline.value;
-      return offline.value.filter((d) => [d.name, d.routerName, d.lastIp, d.mac].some((v) => v && String(v).toLowerCase().includes(q)));
+      if (!q) return logicalOffline.value;
+      return logicalOffline.value.filter((d) => [d.name, d.routerName, d.lastIp, d.mac].some((v) => v && String(v).toLowerCase().includes(q)));
     });
     const drawerParent = computed(() => devices.value.find((d) => d.mac === drawer.value?.mac)?.parentName ?? null);
+    const drawerMembers = computed(() => {
+      if (!drawer.value) return [];
+      const k = logicalKey(drawer.value);
+      return allDevices.value.filter((d) => d.mac !== drawer.value.mac && logicalKey(d) === k);
+    });
     const eventGroups = computed(() => {
       const groups = [];
       let cur = null;
@@ -643,9 +687,10 @@ createApp({
     const locate = (t) => {
       if (!t.mac) return;
       tab.value = 'devices';
-      highlight.value = t.mac;
-      nextTick(() => document.getElementById('dev-' + t.mac)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
-      setTimeout(() => { if (highlight.value === t.mac) highlight.value = null; }, 2500);
+      const mac = logicalDevices.value.find((d) => d.members.includes(t.mac))?.mac ?? t.mac;
+      highlight.value = mac;
+      nextTick(() => document.getElementById('dev-' + mac)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      setTimeout(() => { if (highlight.value === mac) highlight.value = null; }, 2500);
     };
 
     // ---------- 排序/筛选 ----------
@@ -672,7 +717,7 @@ createApp({
     });
 
     return {
-      connected, router, wan, devices, offline, filteredOffline, drawerParent, events, stats, toasts, now, query, sort, filter, tab, isMobile, highlight,
+      connected, router, wan, devices, offline, logicalDevices, filteredOffline, drawerParent, drawerMembers, events, stats, toasts, now, query, sort, filter, tab, isMobile, highlight,
       drawer, drawerSessions, drawerError, form, saving, mergeTargets, evList, evLoading, evDone,
       pendingCount, randomCount, lastEvent, statusPill, filteredDevices, eventGroups, pendingLeft,
       fmtSpeed, fmtTime, fmtDateTime, fmtDuration, fmtConn, fmtAgo,

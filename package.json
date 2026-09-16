@@ -1,7 +1,7 @@
 {
-  "name": "miwifi-monitor",
+  "name": "menshen",
   "version": "0.1.0",
-  "description": "Redmi AX6000 局域网设备在线状态监控：轮询 → 差量/消抖 → SQLite 持久化 → WebSocket 看板",
+  "description": "门神：小米路由器（Redmi AX6000）局域网设备上下线监控与归档看板",
   "type": "module",
   "private": true,
   "main": "src/index.js",
@@ -10,9 +10,16 @@
     "probe": "node scripts/probe.js",
     "test": "node --test \"test/**/*.test.js\""
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "better-sqlite3": "^11.6.0",
     "ws": "^8.18.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Havadking/menshen.git"
   }
 }

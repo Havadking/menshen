@@ -5,8 +5,9 @@ import { createLogger } from '../logger.js';
 
 const log = createLogger('state');
 
-// warm start 时，若路由器统计的上线时间比库中会话开始时间晚这么多，视为中途断过
-const WARM_RESTART_TOLERANCE_MS = 5 * 60_000;
+// warm start 时，路由器统计的上线时间（now - statistics.online）有几秒到几十秒误差，
+// 只有它明显晚于我们最后一次见到设备的时刻，才认定设备在进程停止期间断开过。
+const WARM_RESTART_TOLERANCE_MS = 60_000;
 
 /**
  * 差量检测 + 消抖 + 路由器不可达保护。
@@ -97,13 +98,17 @@ export class StateEngine extends EventEmitter {
       openByMac.delete(d.mac);
       const routerStart = d.onlineSec > 0 ? now - d.onlineSec * 1000 : null;
 
-      if (s && (!routerStart || routerStart - s.started_at <= WARM_RESTART_TOLERANCE_MS)) {
-        // 沿用未闭合会话
-        this._track(d, now, { sessionId: s.id, startedAt: s.started_at, profile: this._profile(d, now) });
-        continue;
-      }
       if (s) {
-        // 路由器说它是后来才上线的：旧会话闭合在最后一次见到的时刻
+        // 进程停止的时间不超过离线缓冲：等同于一次正常轮询间隔，直接沿用会话。
+        // 停止较久时，看路由器计数器：它说的上线时刻若早于我们最后一次见到设备，
+        // 说明中间没断（计数器在我们监控期间重置过也算没断）；明显晚于才算断开过。
+        const gap = now - s.last_seen_at;
+        const rejoined = gap > this.leaveGraceMs && routerStart && routerStart - s.last_seen_at > WARM_RESTART_TOLERANCE_MS;
+        if (!rejoined) {
+          this._track(d, now, { sessionId: s.id, startedAt: s.started_at, profile: this._profile(d, now) });
+          continue;
+        }
+        // 设备在进程停止期间离开又回来：旧会话闭合在最后一次见到的时刻，新会话从路由器给的时刻开始
         this.store.closeSession(s.id, { endedAt: s.last_seen_at, endSource: 'recover' });
       }
       // 首轮只落库不广播：避免进程重启时看板弹一排 Toast

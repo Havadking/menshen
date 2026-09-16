@@ -132,7 +132,7 @@
   .switch .tog::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
   .switch.on .tog { background: var(--green); }
   .switch.on .tog::after { transform: translateX(14px); }
-  .sess { display: grid; grid-template-columns: 1fr 1fr 70px; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+  .sess { display: grid; grid-template-columns: 1fr 1fr 84px; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
   .sess .k { color: var(--muted); font-size: 11px; }
   .err { color: var(--red); font-size: 12px; }
 
@@ -382,7 +382,7 @@
           <div v-for="s in drawerSessions" :key="s.id" class="sess">
             <div><div class="k">上线</div><div class="mono">{{ fmtDateTime(s.started_at) }}</div></div>
             <div><div class="k">离开</div><div class="mono">{{ s.ended_at ? fmtDateTime(s.ended_at) : '在线中' }}</div></div>
-            <div style="text-align:right"><div class="k">时长</div><div class="mono">{{ fmtDuration((s.ended_at || now) - s.started_at, true) }}</div></div>
+            <div style="text-align:right"><div class="k">时长</div><div class="mono">{{ fmtDuration((s.ended_at || now) - s.started_at) }}</div></div>
           </div>
         </div>
         <div><a :href="'/api/export'" download>导出全部会话 CSV</a></div>

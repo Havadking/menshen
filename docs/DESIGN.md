@@ -160,7 +160,7 @@ PollResult.ok == true
 **冷启动 / 重启对齐（warm start）**
 
 1. 启动时读取 `sessions` 中 `ended_at IS NULL` 的会话，以及第一轮轮询结果
-2. 设备在线且有未闭合会话 → 沿用该会话（不产生 JOIN）；若 `statistics.online` 显示路由器统计的在线时长明显短于会话时长（说明中途断过），则闭合旧会话、按 `now - statistics.online*1000` 开新会话
+2. 设备在线且有未闭合会话 → 默认沿用该会话（不产生 JOIN）。只有同时满足「进程停止时间超过离线缓冲」且「路由器统计的上线时刻（`now - statistics.online`）明显晚于我们最后一次见到设备的时刻」才认定设备在停机期间断开过：闭合旧会话于 `last_seen_at`，按路由器时刻开新会话。注意路由器计数器在设备重新关联（漫游、换频段）时会重置而设备并未离线，所以必须与 `last_seen_at` 比较而不是与会话开始时间比较
 3. 设备在线但无未闭合会话 → 按 `statistics.online` 反推 `started_at` 开会话，写 JOIN 事件但标记 `source='warm'`，前端不弹 Toast
 4. 设备不在线但有未闭合会话 → 以会话的 `last_seen_at` 作为 `ended_at` 闭合，`source='recover'`
 5. 首轮不广播 JOIN/LEAVE Toast，只推 SYNC

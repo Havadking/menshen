@@ -57,6 +57,43 @@ test('warm start 沿用库中未闭合会话，补闭合已消失设备的会话
   assert.equal(store.getDevice(B).isOnline, false);
 });
 
+test('warm start：进程刚重启时，即使路由器计数器已重置也沿用会话', () => {
+  const store = new Store(':memory:');
+  const t0 = 10_000_000;
+  store.seenDevice({ mac: A, routerName: 'a', now: t0 - 5000 });
+  const sid = store.openSession({ mac: A, ip: '1.1.1.1', startedAt: t0 - 20 * 3600_000, lastSeenAt: t0 - 5000 });
+  const engine = new StateEngine(store, { now: () => t0 });
+  // 路由器说 10 分钟前才上线（设备在我们监控期间重新关联过），但我们 5 秒前还见过它
+  engine.handlePoll({ ok: true, devices: [dev(A, { onlineSec: 600 })], wan: {} });
+  assert.equal(engine.tracked.get(A).sessionId, sid);
+  assert.equal(store.getOpenSessions().length, 1);
+  assert.equal(store.listEvents().length, 1); // 只有原来的 JOIN
+});
+
+test('warm start：进程停了很久且路由器说设备是之后才上线的，才拆成两段会话', () => {
+  const store = new Store(':memory:');
+  const t0 = 10_000_000;
+  store.seenDevice({ mac: A, routerName: 'a', now: t0 - 3600_000 });
+  const lastSeen = t0 - 3600_000; // 一小时前进程停了
+  const sid = store.openSession({ mac: A, ip: '1.1.1.1', startedAt: t0 - 20 * 3600_000, lastSeenAt: lastSeen });
+  const engine = new StateEngine(store, { now: () => t0 });
+  engine.handlePoll({ ok: true, devices: [dev(A, { onlineSec: 600 })], wan: {} }); // 路由器：10 分钟前上线
+  const old = store.db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid);
+  assert.equal(old.ended_at, lastSeen);
+  assert.equal(old.end_source, 'recover');
+  const cur = store.getOpenSessions()[0];
+  assert.notEqual(cur.id, sid);
+  assert.equal(cur.started_at, t0 - 600_000);
+
+  // 反例：停了很久，但路由器说设备一直在线（计数器早于最后一次见到）→ 沿用
+  const store2 = new Store(':memory:');
+  store2.seenDevice({ mac: B, routerName: 'b', now: t0 - 3600_000 });
+  const sid2 = store2.openSession({ mac: B, ip: null, startedAt: t0 - 20 * 3600_000, lastSeenAt: t0 - 3600_000 });
+  const engine2 = new StateEngine(store2, { now: () => t0 });
+  engine2.handlePoll({ ok: true, devices: [dev(B, { onlineSec: 19 * 3600 })], wan: {} });
+  assert.equal(engine2.tracked.get(B).sessionId, sid2);
+});
+
 test('新设备出现触发 JOIN 并写会话', () => {
   const { store, events, clock, ok } = setup();
   ok([dev(A)]);

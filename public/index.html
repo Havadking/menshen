@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MiWiFi Monitor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236cb6ff' stroke-width='2'><rect x='3' y='13' width='18' height='7' rx='2'/><path d='M12 13V8M8.5 5.5a5 5 0 0 1 7 0M6 3a8.5 8.5 0 0 1 12 0'/></svg>">
+<style>
+  :root {
+    --bg: #0f1216; --panel: #161b22; --panel-2: #1a2029; --line: #262d37; --line-soft: #1f252e;
+    --text: #e6e9ef; --muted: #8b95a5; --dim: #6f7a8a; --faint: #3d4652;
+    --green: #5ad27a; --red: #f0716a; --amber: #f2b84b; --blue: #6cb6ff;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--blue); text-decoration: none; }
+  button { font: inherit; color: inherit; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { background: var(--panel-2); }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #0b1620; font-weight: 500; }
+  button.primary:hover { filter: brightness(1.1); }
+  input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; outline: none; }
+  input:focus, select:focus { border-color: var(--blue); }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  [v-cloak] { display: none; }
+
+  #app { height: 100%; display: flex; flex-direction: column; }
+
+  /* 顶栏 */
+  .topbar { height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--line-soft); }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand h1 { font-size: 15px; font-weight: 600; margin: 0; white-space: nowrap; }
+  .brand .sub { color: var(--dim); font-size: 12px; white-space: nowrap; }
+  .pill { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; border: 1px solid; font-size: 12px; white-space: nowrap; }
+  .pill.ok { border-color: #1f3a2a; background: #12201a; color: #9fd9b0; }
+  .pill.warn { border-color: #4a3b1c; background: #241d0f; color: #f2c979; }
+  .pill.bad { border-color: #4a2320; background: #241413; color: #f4a09a; }
+  .pill .sep { opacity: .5; }
+  .wan { display: flex; align-items: center; gap: 16px; }
+  .wan .v { display: flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
+  .wan .lbl { color: var(--dim); font-size: 11px; }
+
+  /* 指标 */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 20px 24px 0; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .stat .lbl { color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+  .stat .val { font-size: 28px; line-height: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat .sub { color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 主区 */
+  .main { display: flex; gap: 20px; padding: 16px 24px 20px; flex: 1; min-height: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .panel.devices { flex: 2; }
+  .panel.events { flex: 1; }
+  .panel-h { height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); }
+  .panel-h .t { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .panel-h .t .n { color: var(--muted); font-size: 12px; font-weight: 400; }
+  .panel-b { flex: 1; overflow: auto; }
+  .search { width: 240px; height: 30px; padding: 0 10px; font-size: 12px; }
+  .search::placeholder { color: var(--dim); }
+
+  /* 设备表 */
+  .row { display: grid; grid-template-columns: 24px minmax(160px, 1fr) 124px 150px 56px 92px 88px 88px 32px; min-width: max-content; column-gap: 10px; align-items: center; height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line-soft); }
+  .row:not(.th):hover { background: var(--panel-2); }
+  .row.hl { background: #1c2a3a; }
+  .row.th { height: 36px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; cursor: default; }
+  .row.th .s { cursor: pointer; user-select: none; }
+  .row.th .s.on { color: var(--blue); }
+  .row.pending { color: var(--muted); }
+  .r { text-align: right; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .dot.pending { background: var(--amber); }
+  .dot.off { background: var(--faint); }
+  .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag { display: inline-block; padding: 1px 5px; border-radius: 4px; font-size: 10px; line-height: 14px; border: 1px solid var(--line); color: var(--muted); font-weight: 500; vertical-align: 1px; }
+  .tag.warn { color: var(--amber); border-color: #4a3b1c; }
+  .num { font-size: 12px; color: #c9d1dc; }
+  .num.zero { color: var(--faint); }
+  .conn { color: var(--muted); font-size: 11px; }
+  .icon-btn { border: none; padding: 4px; border-radius: 4px; display: inline-flex; color: #4d5866; }
+  .icon-btn:hover { color: var(--text); background: var(--line); }
+  .empty { padding: 48px 16px; text-align: center; color: var(--dim); }
+
+  /* 事件流 */
+  .chips { display: flex; gap: 6px; }
+  .chip { padding: 3px 10px; border-radius: 999px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); cursor: pointer; }
+  .chip.on { color: var(--text); background: #232b36; border-color: #232b36; }
+  .group { padding: 10px 16px 6px; color: var(--dim); font-size: 11px; font-weight: 500; letter-spacing: .06em; background: #131820; border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; }
+  .ev { display: flex; gap: 10px; align-items: flex-start; padding: 9px 16px; border-bottom: 1px solid var(--line-soft); cursor: default; }
+  .ev:hover { background: var(--panel-2); }
+  .ev .time { color: var(--muted); font-size: 11px; width: 58px; flex-shrink: 0; padding-top: 2px; }
+  .ev .d { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .ev .txt { color: #d5dbe4; font-size: 12px; min-width: 0; }
+  .ev .meta { color: var(--muted); font-size: 11px; }
+  .more { padding: 12px; text-align: center; color: var(--dim); font-size: 12px; }
+
+  /* Toast */
+  .toasts { position: fixed; right: 24px; bottom: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  .toast { width: 300px; background: var(--panel-2); border: 1px solid #2c3440; border-radius: 6px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.45); cursor: pointer; animation: rise .18s ease-out; }
+  .toast .d { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .toast .t { font-weight: 500; }
+  .toast .m { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* 抽屉 */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100%; background: var(--panel); border-left: 1px solid var(--line); z-index: 41; display: flex; flex-direction: column; animation: slide .18s ease-out; }
+  @keyframes slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .drawer-h { height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 600; }
+  .drawer-b { flex: 1; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+  .field .hint { color: var(--dim); font-size: 11px; }
+  .kv { display: grid; grid-template-columns: 80px 1fr; row-gap: 6px; font-size: 12px; }
+  .kv .k { color: var(--muted); }
+  .switch { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .switch .tog { width: 34px; height: 20px; border-radius: 999px; background: var(--faint); position: relative; transition: background .15s; }
+  .switch .tog::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch.on .tog { background: var(--green); }
+  .switch.on .tog::after { transform: translateX(14px); }
+  .sess { display: grid; grid-template-columns: 1fr 1fr 70px; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+  .sess .k { color: var(--muted); font-size: 11px; }
+  .err { color: var(--red); font-size: 12px; }
+
+  /* 竖屏 / 窄桌面：上下堆叠，表格占满宽度 */
+  @media (max-width: 1280px) and (min-width: 901px) {
+    .main { flex-direction: column; padding: 16px; gap: 16px; }
+    .panel.devices { flex: 3; }
+    .panel.events { flex: 2; }
+    .stats { padding: 16px 16px 0; gap: 12px; }
+    .topbar { padding: 0 16px; }
+  }
+  @media (max-width: 1100px) and (min-width: 901px) {
+    .row { grid-template-columns: 24px minmax(140px, 1fr) 116px 140px 48px 84px 80px 80px 28px; column-gap: 8px; padding: 0 12px; }
+  }
+
+  /* 手机 */
+  .seg { display: none; margin: 0 16px 8px; padding: 3px; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; }
+  .seg button { flex: 1; border: none; border-radius: 5px; padding: 8px 0; color: var(--muted); }
+  .seg button.on { background: #232b36; color: var(--text); font-weight: 500; }
+  .card { display: none; }
+
+  @media (max-width: 900px) {
+    .topbar { padding: 0 16px; height: 52px; }
+    .brand h1, .brand .sub, .pill .hide-m, .wan .lbl { display: none; }
+    .wan { gap: 10px; }
+    .wan .v { font-size: 12px; }
+    .pill { padding: 4px 10px; font-size: 11px; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px 16px 0; }
+    .stat { padding: 12px 14px; }
+    .stat .val { font-size: 22px; }
+    .stat .sub { display: none; }
+    .main { padding: 10px 0 0; gap: 0; flex-direction: column; }
+    .seg { display: flex; }
+    .panel { border-left: none; border-right: none; border-radius: 0; }
+    .panel.devices, .panel.events { flex: 1; }
+    .panel[hidden] { display: none; }
+    .panel-h .search { width: 100%; }
+    .row { display: none; }
+    .card { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
+    .card .body { flex: 1; min-width: 0; }
+    .card .side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .toasts { left: 16px; right: 16px; top: 8px; bottom: auto; }
+    .toast { width: auto; animation-name: drop; }
+    @keyframes drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+    .drawer { width: 100%; border-left: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6cb6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 16.5h.01M11 16.5h.01"></path><path d="M12 13V8"></path><path d="M8.5 5.5a5 5 0 0 1 7 0"></path><path d="M6 3a8.5 8.5 0 0 1 12 0"></path></svg>
+      <h1>MiWiFi Monitor</h1>
+      <span class="sub">Redmi AX6000</span>
+    </div>
+    <div class="pill" :class="statusPill.cls">
+      <span class="dot" :class="statusPill.dot"></span>
+      <span>{{ statusPill.text }}</span>
+      <template v-if="statusPill.extra"><span class="sep hide-m">·</span><span class="mono hide-m">{{ statusPill.extra }}</span></template>
+    </div>
+    <div class="wan">
+      <div class="v"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5ad27a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"></path></svg><span class="mono">{{ fmtSpeed(wan.down) }}</span></div>
+      <div class="v"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6cb6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg><span class="mono">{{ fmtSpeed(wan.up) }}</span></div>
+      <span class="lbl">WAN</span>
+    </div>
+  </header>
+
+  <!-- 指标 -->
+  <section class="stats">
+    <div class="stat"><div class="lbl">在线设备</div><div class="val mono">{{ devices.length }}</div><div class="sub">{{ pendingCount ? pendingCount + ' 台离线确认中' : '全部稳定在线' }}</div></div>
+    <div class="stat"><div class="lbl">今日出现</div><div class="val mono">{{ stats.devicesToday ?? '–' }}</div><div class="sub">{{ randomCount ? '含 ' + randomCount + ' 个随机 MAC' : '按合并后的设备计' }}</div></div>
+    <div class="stat"><div class="lbl">今日事件</div><div class="val mono">{{ stats.eventsToday ?? '–' }}</div><div class="sub">{{ stats.joinsToday ?? 0 }} 次上线 · {{ stats.leavesToday ?? 0 }} 次离开</div></div>
+    <div class="stat"><div class="lbl">最近变化</div><div class="val mono">{{ lastEvent ? fmtTime(lastEvent.at) : '–' }}</div><div class="sub">{{ lastEvent ? lastEvent.name + (lastEvent.type === 'JOIN' ? ' 已连入' : ' 已离开') : '暂无事件' }}</div></div>
+  </section>
+
+  <!-- 主区 -->
+  <section class="main">
+    <div class="seg"><button :class="{on: tab==='devices'}" @click="tab='devices'">设备</button><button :class="{on: tab==='events'}" @click="tab='events'">事件</button></div>
+
+    <!-- 在线设备 -->
+    <div class="panel devices" :hidden="isMobile && tab !== 'devices'">
+      <div class="panel-h">
+        <div class="t">在线设备 <span class="n mono">{{ filteredDevices.length }}</span></div>
+        <input class="search" v-model.trim="query" placeholder="搜索名称 / IP / MAC">
+      </div>
+      <div class="panel-b">
+        <div class="row th">
+          <div></div>
+          <div class="s" :class="{on: sort.key==='name'}" @click="setSort('name')">设备{{ sortMark('name') }}</div>
+          <div class="s" :class="{on: sort.key==='ip'}" @click="setSort('ip')">IP{{ sortMark('ip') }}</div>
+          <div>MAC</div>
+          <div>连接</div>
+          <div class="s r" :class="{on: sort.key==='startedAt'}" @click="setSort('startedAt')">在线时长{{ sortMark('startedAt') }}</div>
+          <div class="s r" :class="{on: sort.key==='down'}" @click="setSort('down')">下行{{ sortMark('down') }}</div>
+          <div class="s r" :class="{on: sort.key==='up'}" @click="setSort('up')">上行{{ sortMark('up') }}</div>
+          <div></div>
+        </div>
+        <template v-for="d in filteredDevices" :key="d.mac">
+          <div class="row" :class="{pending: d.pendingLeave, hl: highlight === d.mac}" :id="'dev-' + d.mac" @click="openDrawer(d.mac)">
+            <div class="dot" :class="{pending: d.pendingLeave}"></div>
+            <div style="min-width:0">
+              <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span><span v-if="d.canonicalMac" class="tag">合并</span></div>
+              <div class="sub" :style="d.pendingLeave ? 'color: var(--amber)' : ''">{{ d.pendingLeave ? '离线确认中 · ' + pendingLeft(d) + 's' : (d.routerName && d.routerName !== d.name ? d.routerName : (d.customName ? d.routerName || '' : '')) }}</div>
+            </div>
+            <div class="mono num">{{ d.ip || '—' }}</div>
+            <div class="mono sub">{{ d.mac }}</div>
+            <div class="conn">{{ fmtConn(d.connType) }}</div>
+            <div class="mono num r">{{ fmtDuration(now - d.startedAt) }}</div>
+            <div class="mono num r" :class="{zero: !d.down}">{{ d.down ? fmtSpeed(d.down) : '—' }}</div>
+            <div class="mono num r" :class="{zero: !d.up}">{{ d.up ? fmtSpeed(d.up) : '—' }}</div>
+            <div style="display:flex;justify-content:center"><button class="icon-btn" title="编辑" @click.stop="openDrawer(d.mac)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16v4z"></path><path d="M12.5 7.5l4 4"></path></svg></button></div>
+          </div>
+          <div class="card" :class="{hl: highlight === d.mac}" @click="openDrawer(d.mac)">
+            <div class="dot" :class="{pending: d.pendingLeave}"></div>
+            <div class="body">
+              <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span></div>
+              <div class="sub mono" :style="d.pendingLeave ? 'color: var(--amber)' : ''">{{ d.pendingLeave ? '离线确认中 · ' + pendingLeft(d) + 's' : (d.ip || '—') + ' · ' + fmtConn(d.connType) }}</div>
+            </div>
+            <div class="side">
+              <div class="mono num" style="color:var(--text);font-size:13px">{{ fmtDuration(now - d.startedAt) }}</div>
+              <div class="mono num" :class="{zero: !d.down && !d.up}">{{ d.down >= d.up ? (d.down ? '↓ ' + fmtSpeed(d.down) : '—') : '↑ ' + fmtSpeed(d.up) }}</div>
+            </div>
+          </div>
+        </template>
+        <div v-if="!filteredDevices.length" class="empty">{{ devices.length ? '没有匹配的设备' : (connected ? '当前没有在线设备' : '等待连接…') }}</div>
+      </div>
+    </div>
+
+    <!-- 事件 -->
+    <div class="panel events" :hidden="isMobile && tab !== 'events'">
+      <div class="panel-h">
+        <div class="t">事件</div>
+        <div class="chips">
+          <span class="chip" :class="{on: filter==='ALL'}" @click="setFilter('ALL')">全部</span>
+          <span class="chip" :class="{on: filter==='JOIN'}" @click="setFilter('JOIN')">上线</span>
+          <span class="chip" :class="{on: filter==='LEAVE'}" @click="setFilter('LEAVE')">离开</span>
+        </div>
+      </div>
+      <div class="panel-b" ref="evList" @scroll="onEvScroll">
+        <template v-for="g in eventGroups" :key="g.label">
+          <div class="group">{{ g.label }}</div>
+          <div v-for="e in g.items" :key="e.key" class="ev" @click="e.mac && openDrawer(e.mac)">
+            <div class="time mono">{{ fmtTime(e.at) }}</div>
+            <div class="d" :style="{background: e.type === 'JOIN' ? 'var(--green)' : e.type === 'LEAVE' ? 'var(--red)' : 'var(--amber)'}"></div>
+            <div class="txt" :style="e.type === 'SYSTEM' ? 'color: var(--amber)' : ''">
+              <div>{{ e.text }}</div>
+              <div class="meta" :class="{mono: e.type === 'JOIN'}">{{ e.meta }}</div>
+            </div>
+          </div>
+        </template>
+        <div v-if="!events.length" class="empty">暂无记录，第一条事件会出现在这里</div>
+        <div v-else class="more">{{ evLoading ? '加载中…' : evDone ? '没有更早的记录了' : '滚动加载更早记录' }}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Toast -->
+  <div class="toasts">
+    <div v-for="t in toasts" :key="t.id" class="toast" @click="locate(t)">
+      <div class="d" :style="{background: t.kind === 'join' ? 'var(--green)' : t.kind === 'leave' ? 'var(--red)' : 'var(--amber)'}"></div>
+      <div style="flex:1;min-width:0"><div class="t">{{ t.title }}</div><div class="m mono">{{ t.meta }}</div></div>
+    </div>
+  </div>
+
+  <!-- 设备抽屉 -->
+  <template v-if="drawer">
+    <div class="overlay" @click="drawer = null"></div>
+    <aside class="drawer">
+      <div class="drawer-h"><span>{{ drawer.name }}</span><button class="icon-btn" @click="drawer = null"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+      <div class="drawer-b">
+        <div class="kv">
+          <span class="k">MAC</span><span class="mono">{{ drawer.mac }} <span v-if="drawer.isRandomMac" class="tag warn">随机</span></span>
+          <span class="k">路由器名</span><span>{{ drawer.routerName || '—' }}</span>
+          <span class="k">IP</span><span class="mono">{{ drawer.lastIp || '—' }}</span>
+          <span class="k">连接</span><span>{{ fmtConn(drawer.connType) }}</span>
+          <span class="k">首次出现</span><span class="mono">{{ fmtDateTime(drawer.firstSeenAt) }}</span>
+          <span class="k">最近出现</span><span class="mono">{{ fmtDateTime(drawer.lastSeenAt) }}</span>
+        </div>
+        <div class="field">
+          <label>自定义名称</label>
+          <div style="display:flex;gap:8px"><input v-model.trim="form.customName" placeholder="留空则使用路由器名" style="flex:1" @keyup.enter="saveDrawer"><button class="primary" @click="saveDrawer" :disabled="saving">保存</button></div>
+        </div>
+        <div class="switch" :class="{on: form.notify}" @click="form.notify = !form.notify; saveDrawer()">
+          <div><div>上下线提醒</div><div class="hint">关闭后不再弹出 Toast，时间线照常记录</div></div>
+          <div class="tog"></div>
+        </div>
+        <div class="field">
+          <label>合并到设备</label>
+          <select v-model="form.canonicalMac" @change="saveDrawer">
+            <option value="">不合并（独立设备）</option>
+            <option v-for="d in mergeTargets" :key="d.mac" :value="d.mac">{{ d.name }} · {{ d.mac }}</option>
+          </select>
+          <div class="hint">随机 MAC 的手机可以合并到同一台逻辑设备，统计与展示名会跟随目标设备</div>
+        </div>
+        <div v-if="drawerError" class="err">{{ drawerError }}</div>
+        <div class="field">
+          <label>最近会话</label>
+          <div v-if="!drawerSessions.length" class="hint">暂无记录</div>
+          <div v-for="s in drawerSessions" :key="s.id" class="sess">
+            <div><div class="k">上线</div><div class="mono">{{ fmtDateTime(s.started_at) }}</div></div>
+            <div><div class="k">离开</div><div class="mono">{{ s.ended_at ? fmtDateTime(s.ended_at) : '在线中' }}</div></div>
+            <div style="text-align:right"><div class="k">时长</div><div class="mono">{{ fmtDuration((s.ended_at || now) - s.started_at, true) }}</div></div>
+          </div>
+        </div>
+        <div><a :href="'/api/export'" download>导出全部会话 CSV</a></div>
+      </div>
+    </aside>
+  </template>
+</div>
+
+<script src="vendor/vue.global.prod.js"></script>
+<script>
+const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } = Vue;
+
+createApp({
+  setup() {
+    // ---------- 状态 ----------
+    const connected = ref(false);
+    const router = reactive({ reachable: true, failures: 0, lastPollAt: null, error: null });
+    const wan = reactive({ down: 0, up: 0 });
+    const devices = ref([]);
+    const leaveGraceMs = ref(30000);
+    const events = ref([]);
+    const stats = reactive({});
+    const toasts = ref([]);
+    const now = ref(Date.now());
+    const query = ref('');
+    const sort = reactive({ key: 'startedAt', dir: 'desc' });
+    const filter = ref('ALL');
+    const tab = ref('devices');
+    const isMobile = ref(window.innerWidth <= 900);
+    const highlight = ref(null);
+    const drawer = ref(null);
+    const drawerSessions = ref([]);
+    const drawerError = ref('');
+    const allDevices = ref([]);
+    const form = reactive({ customName: '', notify: true, canonicalMac: '' });
+    const saving = ref(false);
+    const evList = ref(null);
+    const evLoading = ref(false);
+    const evDone = ref(false);
+    let toastSeq = 0;
+
+    // ---------- 格式化 ----------
+    const p2 = (n) => String(n).padStart(2, '0');
+    const fmtSpeed = (b) => {
+      b = Number(b) || 0;
+      if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB/s';
+      if (b >= 1024) return Math.round(b / 1024) + ' KB/s';
+      return b + ' B/s';
+    };
+    const fmtTime = (ms) => { const d = new Date(ms); return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; };
+    const fmtDateTime = (ms) => { if (!ms) return '—'; const d = new Date(ms); return `${d.getMonth() + 1}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+    const fmtDuration = (ms, words = false) => {
+      const s = Math.max(0, Math.floor(ms / 1000));
+      const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      if (words) {
+        if (d) return `${d} 天 ${h} 小时`;
+        if (h) return `${h} 小时 ${m} 分`;
+        if (m) return `${m} 分 ${sec} 秒`;
+        return `${sec} 秒`;
+      }
+      if (d) return `${d}d ${p2(h)}:${p2(m)}`;
+      return `${p2(h)}:${p2(m)}:${p2(sec)}`;
+    };
+    const fmtConn = (c) => ({ wired: '有线', '2.4g': '2.4G', '5g': '5G', wifi: 'Wi-Fi' }[c] || '—');
+    const dayLabel = (ms) => {
+      const d = new Date(ms), t = new Date(); t.setHours(0, 0, 0, 0);
+      const diff = Math.floor((t - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+      if (diff === 0) return '今天';
+      if (diff === 1) return '昨天';
+      return `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+    };
+
+    // ---------- 派生 ----------
+    const pendingCount = computed(() => devices.value.filter((d) => d.pendingLeave).length);
+    const randomCount = computed(() => devices.value.filter((d) => d.isRandomMac).length);
+    const lastEvent = computed(() => events.value.find((e) => e.type !== 'SYSTEM'));
+    const statusPill = computed(() => {
+      if (!connected.value) return { cls: 'bad', dot: 'off', text: '已断开，重连中…', extra: '' };
+      if (!router.reachable) return { cls: 'warn', dot: 'pending', text: '路由器不可达', extra: router.lastPollAt ? '已冻结 ' + fmtDuration(now.value - router.lastPollAt) : '' };
+      const ago = router.lastPollAt ? Math.max(0, Math.round((now.value - router.lastPollAt) / 1000)) + 's 前' : '';
+      return { cls: 'ok', dot: '', text: '已连接', extra: ago };
+    });
+    const filteredDevices = computed(() => {
+      const q = query.value.toLowerCase();
+      let list = devices.value;
+      if (q) list = list.filter((d) => [d.name, d.routerName, d.ip, d.mac].some((v) => v && String(v).toLowerCase().includes(q)));
+      const { key, dir } = sort;
+      const m = dir === 'asc' ? 1 : -1;
+      return [...list].sort((a, b) => {
+        let av = a[key], bv = b[key];
+        if (key === 'ip') { av = ipNum(av); bv = ipNum(bv); }
+        if (typeof av === 'string') return av.localeCompare(bv || '', 'zh') * m;
+        return ((av || 0) - (bv || 0)) * m;
+      });
+    });
+    const ipNum = (ip) => (ip || '').split('.').reduce((n, o) => n * 256 + (Number(o) || 0), 0);
+    const eventGroups = computed(() => {
+      const groups = [];
+      let cur = null;
+      for (const e of events.value) {
+        if (filter.value !== 'ALL' && e.type !== filter.value && e.type !== 'SYSTEM') continue;
+        const label = dayLabel(e.at);
+        if (!cur || cur.label !== label) groups.push(cur = { label, items: [] });
+        cur.items.push(e);
+      }
+      return groups;
+    });
+    const mergeTargets = computed(() => allDevices.value.filter((d) => d.mac !== drawer.value?.mac && !d.canonicalMac));
+    const pendingLeft = (d) => Math.max(0, Math.ceil((leaveGraceMs.value - (now.value - d.pendingSince)) / 1000));
+
+    // ---------- 事件转换 ----------
+    const toEvent = (e) => ({
+      key: `${e.type}-${e.sessionId}`,
+      type: e.type, at: e.at, mac: e.mac, name: e.name,
+      text: `${e.name} ${e.type === 'JOIN' ? '已连入' : '已离开'}`,
+      meta: e.type === 'JOIN' ? `${e.ip || '—'} · ${fmtConn(e.connType)}` : `在线 ${fmtDuration(e.durationMs || 0, true)}`,
+    });
+    const pushEvent = (ev) => {
+      if (events.value.some((x) => x.key === ev.key)) return;
+      const i = events.value.findIndex((x) => x.at <= ev.at);
+      events.value.splice(i < 0 ? events.value.length : i, 0, ev);
+    };
+    const addToast = (t) => {
+      const id = ++toastSeq;
+      toasts.value.push({ id, ...t });
+      if (toasts.value.length > 3) toasts.value.shift();
+      setTimeout(() => { toasts.value = toasts.value.filter((x) => x.id !== id); }, 3000);
+    };
+
+    // ---------- WebSocket ----------
+    let ws = null, retry = 0, retryTimer = null;
+    const connect = () => {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/ws`);
+      ws.onopen = () => { connected.value = true; retry = 0; };
+      ws.onclose = () => {
+        connected.value = false;
+        const delay = Math.min(15000, 1000 * 2 ** retry++);
+        retryTimer = setTimeout(connect, delay);
+      };
+      ws.onerror = () => ws.close();
+      ws.onmessage = (m) => {
+        let msg;
+        try { msg = JSON.parse(m.data); } catch { return; }
+        handle(msg);
+      };
+    };
+    const applySnap = (snap) => {
+      Object.assign(router, snap.router);
+      Object.assign(wan, snap.wan || {});
+      devices.value = snap.devices || [];
+      if (snap.leaveGraceMs) leaveGraceMs.value = snap.leaveGraceMs;
+    };
+    const handle = ({ event, data }) => {
+      switch (event) {
+        case 'HELLO':
+          applySnap(data);
+          events.value = (data.events || []).map(toEvent);
+          evDone.value = events.value.length < 50;
+          loadStats();
+          break;
+        case 'DEVICE_SYNC':
+          applySnap(data);
+          break;
+        case 'DEVICE_JOIN':
+          pushEvent(toEvent({ type: 'JOIN', at: data.ts, ...data }));
+          if (data.notify !== false) addToast({ kind: 'join', mac: data.mac, title: `${data.name} 已连入网络`, meta: `${data.ip || '—'} · ${fmtConn(data.connType)} · ${fmtTime(data.ts)}` });
+          loadStats();
+          break;
+        case 'DEVICE_LEAVE':
+          pushEvent(toEvent({ type: 'LEAVE', at: data.ts, ...data }));
+          if (data.notify !== false) addToast({ kind: 'leave', mac: data.mac, title: `${data.name} 已离开网络`, meta: `在线 ${fmtDuration(data.durationMs, true)} · ${fmtTime(data.ts)}` });
+          loadStats();
+          break;
+        case 'DEVICE_UPDATE':
+          for (const e of events.value) if (e.mac === data.mac) { e.name = data.name; e.text = `${data.name} ${e.type === 'JOIN' ? '已连入' : '已离开'}`; }
+          if (drawer.value?.mac === data.mac) drawer.value = data;
+          break;
+        case 'ROUTER_STATE':
+          Object.assign(router, data);
+          if (!data.reachable) addToast({ kind: 'warn', title: '路由器不可达', meta: data.error || '轮询失败，状态已冻结' });
+          else if (data.downtimeMs) {
+            addToast({ kind: 'warn', title: '路由器已恢复', meta: `中断 ${fmtDuration(data.downtimeMs, true)}` });
+            events.value.unshift({ key: 'sys-' + Date.now(), type: 'SYSTEM', at: Date.now(), text: `路由器不可达 ${fmtDuration(data.downtimeMs, true)}，已恢复`, meta: '期间状态已冻结，未产生离线记录' });
+          }
+          break;
+      }
+    };
+
+    // ---------- REST ----------
+    const api = async (path, opts) => {
+      const r = await fetch(path, opts);
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error?.message || `HTTP ${r.status}`);
+      return body;
+    };
+    const loadStats = async () => { try { Object.assign(stats, await api('/api/stats/today')); } catch { /* ignore */ } };
+    const loadMoreEvents = async () => {
+      if (evLoading.value || evDone.value || !events.value.length) return;
+      evLoading.value = true;
+      try {
+        const oldest = events.value[events.value.length - 1].at;
+        const more = await api(`/api/events?limit=50&before=${oldest}`);
+        for (const e of more) pushEvent(toEvent(e));
+        if (more.length < 50) evDone.value = true;
+      } finally { evLoading.value = false; }
+    };
+    const onEvScroll = () => {
+      const el = evList.value;
+      if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 40) loadMoreEvents();
+    };
+
+    // ---------- 抽屉 ----------
+    const openDrawer = async (mac) => {
+      drawerError.value = '';
+      try {
+        const [d, list, sess] = await Promise.all([api(`/api/devices/${mac}`), api('/api/devices'), api(`/api/sessions?mac=${mac}&limit=20`)]);
+        drawer.value = d;
+        allDevices.value = list;
+        drawerSessions.value = sess;
+        form.customName = d.customName || '';
+        form.notify = d.notify;
+        form.canonicalMac = d.canonicalMac || '';
+      } catch (e) { addToast({ kind: 'warn', title: '加载设备失败', meta: e.message }); }
+    };
+    const saveDrawer = async () => {
+      if (!drawer.value || saving.value) return;
+      saving.value = true;
+      drawerError.value = '';
+      try {
+        drawer.value = await api(`/api/devices/${drawer.value.mac}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customName: form.customName || null, notify: form.notify, canonicalMac: form.canonicalMac || null }),
+        });
+      } catch (e) { drawerError.value = e.message; }
+      finally { saving.value = false; }
+    };
+    const locate = (t) => {
+      if (!t.mac) return;
+      tab.value = 'devices';
+      highlight.value = t.mac;
+      nextTick(() => document.getElementById('dev-' + t.mac)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      setTimeout(() => { if (highlight.value === t.mac) highlight.value = null; }, 2500);
+    };
+
+    // ---------- 排序/筛选 ----------
+    const setSort = (key) => {
+      if (sort.key === key) sort.dir = sort.dir === 'asc' ? 'desc' : 'asc';
+      else { sort.key = key; sort.dir = key === 'name' || key === 'ip' ? 'asc' : 'desc'; }
+    };
+    const sortMark = (key) => (sort.key === key ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : '');
+    const setFilter = (f) => { filter.value = f; nextTick(onEvScroll); };
+
+    // ---------- 生命周期 ----------
+    let tick, statsTimer;
+    const onResize = () => { isMobile.value = window.innerWidth <= 900; };
+    onMounted(() => {
+      connect();
+      tick = setInterval(() => { now.value = Date.now(); }, 1000);
+      statsTimer = setInterval(loadStats, 60000);
+      window.addEventListener('resize', onResize);
+    });
+    onBeforeUnmount(() => {
+      clearInterval(tick); clearInterval(statsTimer); clearTimeout(retryTimer);
+      window.removeEventListener('resize', onResize);
+      ws?.close();
+    });
+
+    return {
+      connected, router, wan, devices, events, stats, toasts, now, query, sort, filter, tab, isMobile, highlight,
+      drawer, drawerSessions, drawerError, form, saving, mergeTargets, evList, evLoading, evDone,
+      pendingCount, randomCount, lastEvent, statusPill, filteredDevices, eventGroups, pendingLeft,
+      fmtSpeed, fmtTime, fmtDateTime, fmtDuration, fmtConn,
+      setSort, sortMark, setFilter, onEvScroll, openDrawer, saveDrawer, locate,
+    };
+  },
+}).mount('#app');
+</script>
+</body>
+</html>

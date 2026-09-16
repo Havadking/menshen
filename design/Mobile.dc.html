@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #0f1216; color: #e6e9ef; font-family: 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; font-size: 14px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+    a { color: #6cb6ff; text-decoration: none; } a:hover { color: #8ec7ff; }
+    .mono { font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .stat { background: #161b22; border: 1px solid #262d37; border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+    .stat-label { color: #8b95a5; font-size: 11px; }
+    .stat-val { font-size: 24px; line-height: 1; font-weight: 500; }
+    .card { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 16px; border-bottom: 1px solid #1f252e; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #5ad27a; flex-shrink: 0; }
+    .dot.pending { background: #f2b84b; }
+    .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sub { color: #8b95a5; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tag { display: inline-block; padding: 1px 5px; border-radius: 4px; font-size: 10px; line-height: 14px; color: #f2b84b; border: 1px solid #4a3b1c; font-weight: 500; }
+    .num { text-align: right; font-size: 12px; color: #c9d1dc; }
+    .num.zero { color: #3d4652; }
+    .seg { flex: 1; text-align: center; padding: 8px 0; border-radius: 5px; font-size: 13px; color: #8b95a5; }
+    .seg.on { background: #232b36; color: #e6e9ef; font-weight: 500; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: #0f1216; overflow: hidden; position: relative;">
+
+  <!-- 顶栏（真实状态栏由系统绘制，此处留白 44px） -->
+  <div style="height: 44px;"></div>
+  <div style="height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6cb6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 16.5h.01M11 16.5h.01"></path><path d="M12 13V8"></path><path d="M8.5 5.5a5 5 0 0 1 7 0"></path><path d="M6 3a8.5 8.5 0 0 1 12 0"></path></svg>
+      <div style="font-size: 16px; font-weight: 600;">MiWiFi Monitor</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid #1f3a2a; background: #12201a; color: #9fd9b0; font-size: 11px;">
+      <div class="dot"></div><span>已连接</span><span class="mono">2s 前</span>
+    </div>
+  </div>
+
+  <!-- 指标 2×2 -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 4px 16px 12px;">
+    <div class="stat"><div class="stat-label">在线设备</div><div class="stat-val mono">14</div></div>
+    <div class="stat"><div class="stat-label">今日出现</div><div class="stat-val mono">21</div></div>
+    <div class="stat"><div class="stat-label">下行</div><div class="stat-val mono" style="font-size: 18px; padding-top: 4px;">12.4 <span style="font-size: 12px; color: #8b95a5;">MB/s</span></div></div>
+    <div class="stat"><div class="stat-label">上行</div><div class="stat-val mono" style="font-size: 18px; padding-top: 4px;">1.31 <span style="font-size: 12px; color: #8b95a5;">MB/s</span></div></div>
+  </div>
+
+  <!-- 分段控件 -->
+  <div style="margin: 0 16px 8px; padding: 3px; display: flex; gap: 2px; background: #161b22; border: 1px solid #262d37; border-radius: 7px;">
+    <div class="seg on">设备</div>
+    <div class="seg">事件</div>
+  </div>
+
+  <!-- 设备列表 -->
+  <div style="flex: 1; overflow: auto; background: #161b22; border-top: 1px solid #262d37;">
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 6px;"><span class="name">iPhone 15 Pro</span><span class="tag">随机</span></div>
+        <div class="sub mono">192.168.31.102 · 5G</div>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;">
+        <div class="mono num" style="color: #e6e9ef; font-size: 13px;">00:02:41</div>
+        <div class="mono num">↓ 1.2 MB/s</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;"><div class="name">PS5</div><div class="sub mono">192.168.31.88 · 有线</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="color: #e6e9ef; font-size: 13px;">03:20:07</div><div class="mono num">↓ 41.7 MB/s</div></div>
+    </div>
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;"><div class="name">小米电视</div><div class="sub mono">192.168.31.35 · 5G</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="color: #e6e9ef; font-size: 13px;">02:05:19</div><div class="mono num">↓ 3.4 MB/s</div></div>
+    </div>
+    <div class="card">
+      <div class="dot pending"></div>
+      <div style="flex: 1; min-width: 0;"><div class="name">华为 MateBook</div><div class="sub" style="color: #f2b84b;">离线确认中 · 18s</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="font-size: 13px;">01:47:52</div><div class="mono num zero">—</div></div>
+    </div>
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;"><div class="name">Switch</div><div class="sub mono">192.168.31.57 · 5G</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="color: #e6e9ef; font-size: 13px;">00:38:10</div><div class="mono num">↓ 22 KB/s</div></div>
+    </div>
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;"><div class="name">MacBook Pro</div><div class="sub mono">192.168.31.20 · 5G</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="color: #e6e9ef; font-size: 13px;">06:12:33</div><div class="mono num">↓ 9.8 MB/s</div></div>
+    </div>
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;"><div style="display: flex; align-items: center; gap: 6px;"><span class="name">Redmi K70</span><span class="tag">随机</span></div><div class="sub mono">192.168.31.119 · 2.4G</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="color: #e6e9ef; font-size: 13px;">07:58:04</div><div class="mono num">↓ 318 KB/s</div></div>
+    </div>
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;"><div class="name">客厅摄像头</div><div class="sub mono">192.168.31.201 · 2.4G</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="color: #e6e9ef; font-size: 13px;">8d 02:14</div><div class="mono num">↑ 640 KB/s</div></div>
+    </div>
+    <div class="card">
+      <div class="dot"></div>
+      <div style="flex: 1; min-width: 0;"><div class="name">群晖 NAS</div><div class="sub mono">192.168.31.10 · 有线</div></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;"><div class="mono num" style="color: #e6e9ef; font-size: 13px;">31d 04:11</div><div class="mono num">↓ 412 KB/s</div></div>
+    </div>
+  </div>
+
+  <!-- Toast（顶部下滑） -->
+  <div style="position: absolute; top: 52px; left: 16px; right: 16px; background: #1a2029; border: 1px solid #2c3440; border-radius: 8px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">
+    <div style="width: 8px; height: 8px; border-radius: 50%; background: #5ad27a; margin-top: 6px; flex-shrink: 0;"></div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 14px; font-weight: 500;">iPhone 15 Pro 已连入网络</div>
+      <div class="mono" style="font-size: 12px; color: #8b95a5; margin-top: 2px;">192.168.31.102 · 5G · 14:20:15</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

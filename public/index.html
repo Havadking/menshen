@@ -61,13 +61,17 @@
   .search::placeholder { color: var(--dim); }
 
   /* 设备表 */
-  .row { display: grid; grid-template-columns: 24px minmax(160px, 1fr) 124px 150px 56px 92px 88px 88px 32px; min-width: max-content; column-gap: 10px; align-items: center; height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line-soft); }
+  .row { display: grid; grid-template-columns: 24px minmax(152px, 1fr) 116px 140px 56px 92px 88px 88px 32px; min-width: 900px; column-gap: 10px; align-items: center; height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line-soft); }
   .row:not(.th):hover { background: var(--panel-2); }
   .row.hl { background: #1c2a3a; }
   .row.th { height: 36px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; cursor: default; }
   .row.th .s { cursor: pointer; user-select: none; }
   .row.th .s.on { color: var(--blue); }
   .row.pending { color: var(--muted); }
+  .row.th.sec { position: static; margin-top: 12px; border-top: 1px solid var(--line); }
+  .row.th.sec .t { color: var(--text); font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+  .row.off .name, .card.off .name { color: var(--muted); font-weight: 400; }
+  .row.off .num, .card.off .num { color: var(--muted); }
   .r { text-align: right; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
   .dot.pending { background: var(--amber); }
@@ -133,14 +137,14 @@
     .topbar { padding: 0 16px; }
   }
   @media (max-width: 1100px) and (min-width: 901px) {
-    .row { grid-template-columns: 24px minmax(140px, 1fr) 116px 140px 48px 84px 80px 80px 28px; column-gap: 8px; padding: 0 12px; }
+    .row { grid-template-columns: 24px minmax(140px, 1fr) 116px 140px 48px 84px 80px 80px 28px; column-gap: 8px; padding: 0 12px; min-width: 828px; }
   }
 
   /* 手机 */
   .seg { display: none; margin: 0 16px 8px; padding: 3px; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; }
   .seg button { flex: 1; border: none; border-radius: 5px; padding: 8px 0; color: var(--muted); }
   .seg button.on { background: #232b36; color: var(--text); font-weight: 500; }
-  .card { display: none; }
+  .card, .card-sec { display: none; }
 
   @media (max-width: 900px) {
     .topbar { padding: 0 16px; height: 52px; }
@@ -162,6 +166,7 @@
     .card { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
     .card .body { flex: 1; min-width: 0; }
     .card .side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .card-sec { display: block; padding: 12px 16px 6px; color: var(--dim); font-size: 11px; font-weight: 500; letter-spacing: .06em; background: #131820; border-bottom: 1px solid var(--line-soft); }
     .toasts { left: 16px; right: 16px; top: 8px; bottom: auto; }
     .toast { width: auto; animation-name: drop; }
     @keyframes drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
@@ -230,7 +235,7 @@
             </div>
             <div class="mono num">{{ d.ip || '—' }}</div>
             <div class="mono sub">{{ d.mac }}</div>
-            <div class="conn">{{ fmtConn(d.connType) }}</div>
+            <div class="conn" :title="d.parentName ? '经 ' + d.parentName + ' 接入' : ''">{{ fmtConn(d.connType) }}<span v-if="d.parentName" style="color:var(--dim)"> ·</span></div>
             <div class="mono num r">{{ fmtDuration(now - d.startedAt) }}</div>
             <div class="mono num r" :class="{zero: !d.down}">{{ d.down ? fmtSpeed(d.down) : '—' }}</div>
             <div class="mono num r" :class="{zero: !d.up}">{{ d.up ? fmtSpeed(d.up) : '—' }}</div>
@@ -249,6 +254,49 @@
           </div>
         </template>
         <div v-if="!filteredDevices.length" class="empty">{{ devices.length ? '没有匹配的设备' : (connected ? '当前没有在线设备' : '等待连接…') }}</div>
+
+        <!-- 离线设备 -->
+        <template v-if="filteredOffline.length">
+          <div class="row th sec">
+            <div></div>
+            <div class="t">离线设备 <span class="n mono" style="font-weight:400;color:var(--muted)">{{ filteredOffline.length }}</span></div>
+            <div>上次 IP</div>
+            <div>MAC</div>
+            <div>连接</div>
+            <div class="r">离线</div>
+            <div class="r">上次在线</div>
+            <div></div>
+            <div></div>
+          </div>
+          <div class="card-sec">离线设备 {{ filteredOffline.length }}</div>
+          <template v-for="d in filteredOffline" :key="'off-' + d.mac">
+            <div class="row off" @click="openDrawer(d.mac)">
+              <div class="dot off"></div>
+              <div style="min-width:0">
+                <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span><span v-if="d.canonicalMac" class="tag">合并</span></div>
+                <div class="sub">{{ d.routerName && d.routerName !== d.name ? d.routerName : '' }}</div>
+              </div>
+              <div class="mono num">{{ d.lastIp || '—' }}</div>
+              <div class="mono sub">{{ d.mac }}</div>
+              <div class="conn">{{ fmtConn(d.connType) }}</div>
+              <div class="mono num r" :title="fmtDateTime(d.lastSeenAt)">{{ fmtAgo(d.lastSeenAt) }}</div>
+              <div class="mono num r">{{ d.lastDurationMs != null ? fmtDuration(d.lastDurationMs) : '—' }}</div>
+              <div></div>
+              <div style="display:flex;justify-content:center"><button class="icon-btn" title="编辑" @click.stop="openDrawer(d.mac)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16v4z"></path><path d="M12.5 7.5l4 4"></path></svg></button></div>
+            </div>
+            <div class="card off" @click="openDrawer(d.mac)">
+              <div class="dot off"></div>
+              <div class="body">
+                <div class="name">{{ d.name }} <span v-if="d.isRandomMac" class="tag warn">随机</span></div>
+                <div class="sub mono">{{ d.lastIp || '—' }} · {{ fmtConn(d.connType) }}</div>
+              </div>
+              <div class="side">
+                <div class="mono num" style="font-size:13px">离线 {{ fmtAgo(d.lastSeenAt) }}</div>
+                <div class="mono num">{{ d.lastDurationMs != null ? '在线 ' + fmtDuration(d.lastDurationMs) : '—' }}</div>
+              </div>
+            </div>
+          </template>
+        </template>
       </div>
     </div>
 
@@ -298,7 +346,7 @@
           <span class="k">MAC</span><span class="mono">{{ drawer.mac }} <span v-if="drawer.isRandomMac" class="tag warn">随机</span></span>
           <span class="k">路由器名</span><span>{{ drawer.routerName || '—' }}</span>
           <span class="k">IP</span><span class="mono">{{ drawer.lastIp || '—' }}</span>
-          <span class="k">连接</span><span>{{ fmtConn(drawer.connType) }}</span>
+          <span class="k">连接</span><span>{{ fmtConn(drawer.connType) }}<template v-if="drawerParent"> · 经 {{ drawerParent }} 接入</template></span>
           <span class="k">首次出现</span><span class="mono">{{ fmtDateTime(drawer.firstSeenAt) }}</span>
           <span class="k">最近出现</span><span class="mono">{{ fmtDateTime(drawer.lastSeenAt) }}</span>
         </div>
@@ -345,6 +393,7 @@ createApp({
     const router = reactive({ reachable: true, failures: 0, lastPollAt: null, error: null });
     const wan = reactive({ down: 0, up: 0 });
     const devices = ref([]);
+    const offline = ref([]);
     const leaveGraceMs = ref(30000);
     const events = ref([]);
     const stats = reactive({});
@@ -390,6 +439,14 @@ createApp({
       return `${p2(h)}:${p2(m)}:${p2(sec)}`;
     };
     const fmtConn = (c) => ({ wired: '有线', '2.4g': '2.4G', '5g': '5G', wifi: 'Wi-Fi' }[c] || '—');
+    const fmtAgo = (ms) => {
+      if (!ms) return '—';
+      const s = Math.max(0, Math.floor((now.value - ms) / 1000));
+      if (s < 60) return '刚刚';
+      if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
+      if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
+      return `${Math.floor(s / 86400)} 天前`;
+    };
     const dayLabel = (ms) => {
       const d = new Date(ms), t = new Date(); t.setHours(0, 0, 0, 0);
       const diff = Math.floor((t - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
@@ -422,6 +479,12 @@ createApp({
       });
     });
     const ipNum = (ip) => (ip || '').split('.').reduce((n, o) => n * 256 + (Number(o) || 0), 0);
+    const filteredOffline = computed(() => {
+      const q = query.value.toLowerCase();
+      if (!q) return offline.value;
+      return offline.value.filter((d) => [d.name, d.routerName, d.lastIp, d.mac].some((v) => v && String(v).toLowerCase().includes(q)));
+    });
+    const drawerParent = computed(() => devices.value.find((d) => d.mac === drawer.value?.mac)?.parentName ?? null);
     const eventGroups = computed(() => {
       const groups = [];
       let cur = null;
@@ -486,6 +549,7 @@ createApp({
           events.value = (data.events || []).map(toEvent);
           evDone.value = events.value.length < 50;
           loadStats();
+          loadOffline();
           break;
         case 'DEVICE_SYNC':
           applySnap(data);
@@ -494,15 +558,18 @@ createApp({
           pushEvent(toEvent({ type: 'JOIN', at: data.ts, ...data }));
           if (data.notify !== false) addToast({ kind: 'join', mac: data.mac, title: `${data.name} 已连入网络`, meta: `${data.ip || '—'} · ${fmtConn(data.connType)} · ${fmtTime(data.ts)}` });
           loadStats();
+          loadOffline();
           break;
         case 'DEVICE_LEAVE':
           pushEvent(toEvent({ type: 'LEAVE', at: data.ts, ...data }));
           if (data.notify !== false) addToast({ kind: 'leave', mac: data.mac, title: `${data.name} 已离开网络`, meta: `在线 ${fmtDuration(data.durationMs, true)} · ${fmtTime(data.ts)}` });
           loadStats();
+          loadOffline();
           break;
         case 'DEVICE_UPDATE':
           for (const e of events.value) if (e.mac === data.mac) { e.name = data.name; e.text = `${data.name} ${e.type === 'JOIN' ? '已连入' : '已离开'}`; }
           if (drawer.value?.mac === data.mac) drawer.value = data;
+          loadOffline();
           break;
         case 'ROUTER_STATE':
           Object.assign(router, data);
@@ -523,6 +590,7 @@ createApp({
       return body;
     };
     const loadStats = async () => { try { Object.assign(stats, await api('/api/stats/today')); } catch { /* ignore */ } };
+    const loadOffline = async () => { try { offline.value = await api('/api/devices/offline'); } catch { /* ignore */ } };
     const loadMoreEvents = async () => {
       if (evLoading.value || evDone.value || !events.value.length) return;
       evLoading.value = true;
@@ -585,7 +653,7 @@ createApp({
     onMounted(() => {
       connect();
       tick = setInterval(() => { now.value = Date.now(); }, 1000);
-      statsTimer = setInterval(loadStats, 60000);
+      statsTimer = setInterval(() => { loadStats(); loadOffline(); }, 60000);
       window.addEventListener('resize', onResize);
     });
     onBeforeUnmount(() => {
@@ -595,10 +663,10 @@ createApp({
     });
 
     return {
-      connected, router, wan, devices, events, stats, toasts, now, query, sort, filter, tab, isMobile, highlight,
+      connected, router, wan, devices, offline, filteredOffline, drawerParent, events, stats, toasts, now, query, sort, filter, tab, isMobile, highlight,
       drawer, drawerSessions, drawerError, form, saving, mergeTargets, evList, evLoading, evDone,
       pendingCount, randomCount, lastEvent, statusPill, filteredDevices, eventGroups, pendingLeft,
-      fmtSpeed, fmtTime, fmtDateTime, fmtDuration, fmtConn,
+      fmtSpeed, fmtTime, fmtDateTime, fmtDuration, fmtConn, fmtAgo,
       setSort, sortMark, setFilter, onEvScroll, openDrawer, saveDrawer, locate,
     };
   },

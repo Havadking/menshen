@@ -109,13 +109,13 @@ export class Store {
   }
 
   /** 设备出现在在线列表：不存在则建档，存在则刷新。返回档案。 */
-  seenDevice({ mac, routerName, friendlyName = null, connType, ip, isRandomMac, push, now }) {
+  seenDevice({ mac, routerName, friendlyName = null, connType, ip, isRandomMac, now }) {
     const existing = this.q.getDevice.get(mac);
     if (!existing) {
       this.q.insertDevice.run({
         mac, routerName, friendlyName, connType, ip, now,
         isRandomMac: isRandomMac ? 1 : 0,
-        notify: push === false ? 0 : 1,
+        notify: 1,   // 实测路由器 push 字段恒为 0，不能作为默认值
       });
     } else {
       this.q.touchDevice.run({ mac, routerName, friendlyName, connType, ip, now });
@@ -159,6 +159,24 @@ export class Store {
     }
     const sql = `${DEVICE_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY d.is_online DESC, d.last_seen_at DESC`;
     return this.db.prepare(sql).all(params).map(rowToDevice);
+  }
+
+  /** 离线设备 + 最近一次会话（用于离线列表） */
+  listOfflineDevices() {
+    const sql = `
+      SELECT d.*, COALESCE(c.custom_name, d.custom_name, d.friendly_name, d.router_name, d.mac) AS display_name,
+             s.started_at AS last_started_at, s.ended_at AS last_ended_at, s.duration_ms AS last_duration_ms
+      FROM devices d
+      LEFT JOIN devices c ON c.mac = d.canonical_mac
+      LEFT JOIN sessions s ON s.id = (SELECT id FROM sessions WHERE mac = d.mac ORDER BY started_at DESC LIMIT 1)
+      WHERE d.is_online = 0
+      ORDER BY d.last_seen_at DESC`;
+    return this.db.prepare(sql).all().map((r) => ({
+      ...rowToDevice(r),
+      lastStartedAt: r.last_started_at,
+      lastEndedAt: r.last_ended_at,
+      lastDurationMs: r.last_duration_ms,
+    }));
   }
 
   /** 修改档案；返回更新后的设备，不存在返回 null */

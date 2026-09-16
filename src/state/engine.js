@@ -135,7 +135,7 @@ export class StateEngine extends EventEmitter {
         t.pendingSince = null;
       }
       const nameChanged = d.name && d.name !== t.routerName;
-      Object.assign(t, { ip: d.ip ?? t.ip, routerName: d.name ?? t.routerName, connType: d.connType ?? t.connType, down: d.down, up: d.up, lastSeenAt: now });
+      Object.assign(t, { ip: d.ip ?? t.ip, routerName: d.name ?? t.routerName, connType: d.connType ?? t.connType, parentMac: d.parentMac, down: d.down, up: d.up, lastSeenAt: now });
       touch.push({ mac: d.mac, routerName: d.name, friendlyName: nameChanged ? friendlyName(d.name) : null, connType: d.connType, ip: d.ip, now, sessionId: t.sessionId });
       if (nameChanged) this.refreshProfile(d.mac);
     }
@@ -158,7 +158,7 @@ export class StateEngine extends EventEmitter {
   _profile(d, now) {
     return this.store.seenDevice({
       mac: d.mac, routerName: d.name, friendlyName: friendlyName(d.name), connType: d.connType, ip: d.ip,
-      isRandomMac: isRandomMac(d.mac), push: d.push, now,
+      isRandomMac: isRandomMac(d.mac), now,
     });
   }
 
@@ -168,6 +168,7 @@ export class StateEngine extends EventEmitter {
       ip: d.ip,
       routerName: d.name,
       connType: d.connType,
+      parentMac: d.parentMac,
       down: d.down,
       up: d.up,
       status: 'ONLINE',
@@ -234,6 +235,8 @@ export class StateEngine extends EventEmitter {
       friendlyName: t.profile.friendlyName,
       ip: t.ip,
       connType: t.connType,
+      parentMac: t.parentMac,
+      parentName: t.parentMac ? (this.tracked.get(t.parentMac)?.profile.name ?? null) : null,
       down: t.down,
       up: t.up,
       startedAt: t.startedAt,

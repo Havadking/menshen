@@ -8,13 +8,13 @@ const DEVICE_ID = 'MOCKDEVICEID0001';
 let stok = null;
 
 const base = [
-  { mac: '3C:22:FB:1A:9E:44', name: 'MacBook Pro', oname: 'MacBook-Pro', ip: '192.168.31.20', type: { type: 'wifi', wifiIndex: 2 }, online: 1, since: Date.now() - 6 * 3600e3 },
-  { mac: '00:11:32:AB:CD:EF', name: '群晖 NAS', oname: 'DS920plus', ip: '192.168.31.10', type: { type: 'wired' }, online: 1, since: Date.now() - 31 * 86400e3 },
-  { mac: '64:09:80:5C:1D:9B', name: '小米电视', oname: 'MiTV-AXSO0', ip: '192.168.31.35', type: { type: 'wifi', wifiIndex: 2 }, online: 1, since: Date.now() - 2 * 3600e3 },
-  { mac: 'F4:F5:DB:3E:60:12', name: '小爱音箱 Pro', oname: 'xiaoai-speaker', ip: '192.168.31.66', type: { type: 'wifi', wifiIndex: 1 }, online: 1, since: Date.now() - 12 * 86400e3 },
-  { mac: '6A:B2:1C:88:99:01', name: 'iPhone 15 Pro', oname: 'iPhone', ip: '192.168.31.102', type: { type: 'wifi', wifiIndex: 2 }, online: 0, since: 0 },
-  { mac: '98:B6:E9:44:A1:C3', name: 'Switch', oname: 'Nintendo', ip: '192.168.31.57', type: { type: 'wifi', wifiIndex: 2 }, online: 0, since: 0 },
-  { mac: 'D2:41:7E:0B:5C:A8', name: 'Redmi K70', oname: 'Redmi-K70', ip: '192.168.31.119', type: { type: 'wifi', wifiIndex: 1 }, online: 0, since: 0 },
+  { mac: '3C:22:FB:1A:9E:44', name: 'MacBook Pro', oname: 'MacBook-Pro', ip: '192.168.31.20', type: 2, online: 1, since: Date.now() - 6 * 3600e3 },
+  { mac: '00:11:32:AB:CD:EF', name: '群晖 NAS', oname: 'DS920plus', ip: '192.168.31.10', type: 0, online: 1, since: Date.now() - 31 * 86400e3 },
+  { mac: '64:09:80:5C:1D:9B', name: '小米电视', oname: 'MiTV-AXSO0', ip: '192.168.31.35', type: 2, online: 1, since: Date.now() - 2 * 3600e3 },
+  { mac: 'F4:F5:DB:3E:60:12', name: '小爱音箱 Pro', oname: 'xiaoai-speaker', ip: '192.168.31.66', type: 1, online: 1, since: Date.now() - 12 * 86400e3 },
+  { mac: '6A:B2:1C:88:99:01', name: 'iPhone 15 Pro', oname: 'iPhone', ip: '192.168.31.102', type: 2, online: 0, since: 0 },
+  { mac: '98:B6:E9:44:A1:C3', name: 'Switch', oname: 'Nintendo', ip: '192.168.31.57', type: 2, online: 0, since: 0 },
+  { mac: 'D2:41:7E:0B:5C:A8', name: 'Redmi K70', oname: 'Redmi-K70', ip: '192.168.31.119', type: 1, online: 0, since: 0 },
 ];
 
 // 随机让某台设备上/下线，模拟真实抖动
@@ -31,7 +31,7 @@ const rnd = (max) => Math.floor(Math.random() * max);
 const deviceList = () => ({
   code: 0,
   list: base.map((d) => ({
-    mac: d.mac, name: d.name, oname: d.oname, online: String(d.online), push: '1',
+    mac: d.mac, name: d.name, oname: d.oname, online: d.online, push: 0, isap: 0, parent: '',
     type: d.type, authority: { wan: 1, pridisk: 0, admin: 1, lan: 0 },
     ip: [{ ip: d.ip, online: String(d.online), active: d.online, downspeed: String(d.online ? rnd(2e6) : 0), upspeed: String(d.online ? rnd(2e5) : 0) }],
     statistics: { online: String(d.online ? Math.floor((Date.now() - d.since) / 1000) : 0), downspeed: '0', upspeed: '0' },

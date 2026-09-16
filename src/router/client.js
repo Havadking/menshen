@@ -46,9 +46,15 @@ function num(v, d = 0) {
   return Number.isFinite(n) ? n : d;
 }
 
-/** 将路由器的 type / wifiIndex 归一为 'wired' | '2.4g' | '5g' | null */
+/**
+ * 将路由器的 type 归一为 'wired' | '2.4g' | '5g' | null。
+ * Redmi AX6000 实测 type 为数字：0 有线，1 2.4G，2 5G；旧固件为 {type:'wifi', wifiIndex}。
+ */
 export function connTypeOf(item) {
   const t = item?.type;
+  if (typeof t === 'number' || (typeof t === 'string' && /^\d+$/.test(t))) {
+    return { 0: 'wired', 1: '2.4g', 2: '5g' }[Number(t)] ?? null;
+  }
   const typeName = typeof t === 'object' && t ? String(t.type ?? '') : String(t ?? '');
   const wifiIndex = num(typeof t === 'object' && t ? t.wifiIndex : item?.wifiIndex, 0);
   if (/wire|lan|cable|eth/i.test(typeName)) return 'wired';
@@ -71,6 +77,8 @@ export function normalizeDevice(item) {
     up: num(ip0?.upspeed ?? stats.upspeed),
     onlineSec: num(stats.online),
     connType: connTypeOf(item),
+    parentMac: item.parent ? normalizeMac(item.parent) : null,   // 经由哪个 Mesh 节点接入
+    isAp: num(item.isap) > 0,
     push: item.push === undefined ? null : String(item.push) === '1',
   };
 }

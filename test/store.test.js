@@ -40,6 +40,20 @@ test('自定义名与合并影响展示名；今日设备数按逻辑设备计',
   assert.throws(() => store.updateDevice(A, { canonicalMac: 'FF:FF:FF:FF:FF:FF' }));
 });
 
+test('离线设备列表带最近一次会话', () => {
+  const store = new Store(':memory:');
+  store.seenDevice({ mac: A, routerName: 'a', now: 1000 });
+  const id = store.openSession({ mac: A, ip: '10.0.0.1', startedAt: 1000 });
+  store.closeSession(id, { endedAt: 5000 });
+  store.setDeviceOffline(A);
+  store.seenDevice({ mac: B, routerName: 'b', now: 1000 }); // 在线，不应出现
+  const off = store.listOfflineDevices();
+  assert.equal(off.length, 1);
+  assert.equal(off[0].mac, A);
+  assert.equal(off[0].lastDurationMs, 4000);
+  assert.equal(off[0].lastEndedAt, 5000);
+});
+
 test('保留策略只删除已闭合的过期会话', () => {
   const store = new Store(':memory:');
   store.seenDevice({ mac: A, routerName: 'x', now: 0 });
@@ -67,8 +81,16 @@ test('devicelist 归一化', () => {
   });
   assert.deepEqual(d, {
     mac: 'AA:BB:CC:DD:EE:FF', name: 'Phone', ip: '192.168.31.5', online: true,
-    down: 100, up: 20, onlineSec: 3600, connType: '5g', push: false,
+    down: 100, up: 20, onlineSec: 3600, connType: '5g', parentMac: null, isAp: false, push: false,
   });
+  // Redmi AX6000 实测：type 为数字，parent 为上级 Mesh 节点
+  const real = normalizeDevice({ mac: 'cc:47:40:c1:9c:6a', name: 'Havad', online: 1, type: 2, isap: 0, parent: 'A4:A9:30:CC:AB:58', push: 0,
+    ip: [{ ip: '192.168.31.192', online: '53589', active: 1, downspeed: '126049', upspeed: '285791' }], statistics: { online: '53589' } });
+  assert.equal(real.connType, '5g');
+  assert.equal(real.parentMac, 'A4:A9:30:CC:AB:58');
+  assert.equal(real.onlineSec, 53589);
+  assert.equal(connTypeOf({ type: 0 }), 'wired');
+  assert.equal(connTypeOf({ type: 1 }), '2.4g');
   assert.equal(connTypeOf({ type: { type: 'wired' } }), 'wired');
   assert.equal(connTypeOf({ type: { type: 'wifi', wifiIndex: 1 } }), '2.4g');
   assert.equal(normalizeDevice({ mac: 'x', online: 0 }).online, false);

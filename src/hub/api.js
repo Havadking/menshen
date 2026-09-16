@@ -55,6 +55,10 @@ export async function handleApi(req, res, url, ctx) {
       return json(res, 200, engine.snapshot()), true;
     }
 
+    if (m === 'GET' && pathname === '/api/devices/offline') {
+      return json(res, 200, store.listOfflineDevices()), true;
+    }
+
     if (m === 'GET' && pathname === '/api/devices') {
       return json(res, 200, store.listDevices({ q: qs.get('q') ?? '', onlineOnly: qs.get('online') === '1' })), true;
     }

@@ -100,19 +100,20 @@
 - 登录失败退避：1s → 2s → 4s → … 上限 60s；连续失败 5 次后每 5 分钟试一次（路由器有密码错误锁定）
 - 每轮拉取两个接口：`devicelist`（设备名/IP/在线标志/在线秒数）和 `status`（WAN 速率）。若实测 `status.dev[]` 只含在线设备且字段够用，可把 `devicelist` 降频到 15s
 
-**`devicelist` 字段映射**（第一阶段需实测确认）
+**`devicelist` 字段映射**（Redmi AX6000 实测，2026-09-16）
 
 | 路由器字段 | 含义 | 本系统用途 |
 |---|---|---|
 | `list[].mac` | MAC | 主键 |
-| `list[].online` | `"1"` 在线 / `"0"` 离线 | **入口必须按此过滤**，列表含历史离线设备 |
+| `list[].online` | `1` 在线 / `0` 离线 | 入口按此过滤（实测该固件列表只含在线设备，米家 App 的离线列表来自云端） |
 | `list[].name` / `oname` | 用户改名 / 原始主机名 | `devices.router_name` |
 | `list[].ip[0].ip` | 当前 IP | `devices.last_ip` / `sessions.ip` |
 | `list[].ip[0].downspeed` / `upspeed` | 实时速率 B/s | 快照推送 |
 | `list[].statistics.online` | 本轮在线秒数 | 重启后反推 `sessions.started_at` |
-| `list[].type` / `wifiIndex` | 有线 / 2.4G / 5G | `devices.conn_type` |
-| `list[].push` | 米家"上线提醒"开关 | `devices.notify` 初始值 |
-| `list[].isap` / `parent` | Mesh 子节点 / 上级节点 | 展示用，可选 |
+| `list[].type` | 数字：`0` 有线 / `1` 2.4G / `2` 5G | `devices.conn_type` |
+| `list[].parent` | 上级 Mesh 节点 MAC（空 = 直连主路由） | 快照 `parentMac` / `parentName` |
+| `list[].push` | 实测恒为 0，不可用 | 忽略；`notify` 默认开启 |
+| `list[].isap` | `>0` 表示该设备本身是 Mesh 子路由 | 展示用 |
 
 ### 4.2 Poller — 调度
 
@@ -254,6 +255,8 @@ ORDER BY at DESC LIMIT :limit;
 |---|---|---|
 | GET | `/api/state` | 路由器可达状态、WAN 速率、在线设备快照（同 DEVICE_SYNC） |
 | GET | `/api/devices` | 全部设备档案（含离线），支持 `?q=` 按名称/IP/MAC 模糊搜 |
+| GET | `/api/devices/offline` | 离线设备 + 最近一次会话（离线列表用） |
+| GET | `/api/debug/raw` | 最近一次路由器原始响应，用于核对字段 |
 | PATCH | `/api/devices/:mac` | 修改 `custom_name`、`notify`、`canonical_mac`（传 `null` 取消合并） |
 | GET | `/api/events?limit=50&before=<ms>&type=JOIN|LEAVE&mac=` | 事件时间线分页 |
 | GET | `/api/sessions?mac=&from=&to=` | 某设备的会话列表（设备详情用） |
@@ -308,6 +311,7 @@ JOIN/LEAVE 事件附带 `notify`（设备是否开启提醒），前端据此决
 ├─ 顶栏        标题 · 路由器连接状态 · WAN 实时速率
 ├─ 总览指标    在线设备 / 今日出现 / 今日事件 / 最近变化
 ├─ 在线设备表  状态 · 设备 · IP · MAC · 连接 · 在线时长 · ↓ · ↑ · 操作
+├─ 离线设备表  同一面板下方：设备 · 上次 IP · MAC · 连接 · 离线多久 · 上次在线时长
 ├─ 事件时间线  筛选(全部/上线/离线) · 按日期分组 · 每条含时间、设备、IP、时长
 ├─ Toast       桌面右下角 / 手机顶部，3s 自动消失，可点击定位到设备行
 └─ 设备抽屉    点击设备行展开：重命名 / 提醒开关 / 合并到 … / 最近会话列表

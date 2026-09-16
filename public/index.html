@@ -13,7 +13,15 @@
     --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
   }
   * { box-sizing: border-box; }
+  html { color-scheme: dark; }
   html, body { height: 100%; }
+  /* 滚动条：细、深色、无轨道，跟主题一致 */
+  * { scrollbar-width: thin; scrollbar-color: #2c3440 transparent; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2c3440; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d4652; }
+  ::-webkit-scrollbar-corner { background: transparent; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   a { color: var(--blue); text-decoration: none; }
   button { font: inherit; color: inherit; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
@@ -56,12 +64,12 @@
   .panel-h { height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); }
   .panel-h .t { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; }
   .panel-h .t .n { color: var(--muted); font-size: 12px; font-weight: 400; }
-  .panel-b { flex: 1; overflow: auto; }
+  .panel-b { flex: 1; overflow-y: auto; overflow-x: hidden; }
   .search { width: 240px; height: 30px; padding: 0 10px; font-size: 12px; }
   .search::placeholder { color: var(--dim); }
 
   /* 设备表 */
-  .row { display: grid; grid-template-columns: 24px minmax(152px, 1fr) 116px 140px 56px 92px 88px 88px 32px; min-width: 900px; column-gap: 10px; align-items: center; height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line-soft); }
+  .row { display: grid; grid-template-columns: 24px minmax(152px, 1fr) 116px 140px 56px 92px 88px 88px 32px; column-gap: 10px; align-items: center; height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line-soft); }
   .row:not(.th):hover { background: var(--panel-2); }
   .row.hl { background: #1c2a3a; }
   .row.th { height: 36px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; cursor: default; }
@@ -76,7 +84,7 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
   .dot.pending { background: var(--amber); }
   .dot.off { background: var(--faint); }
-  .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .sub { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tag { display: inline-block; padding: 1px 5px; border-radius: 4px; font-size: 10px; line-height: 14px; border: 1px solid var(--line); color: var(--muted); font-weight: 500; vertical-align: 1px; }
   .tag.warn { color: var(--amber); border-color: #4a3b1c; }
@@ -137,6 +145,7 @@
     .topbar { padding: 0 16px; }
   }
   @media (max-width: 1100px) and (min-width: 901px) {
+    .panel.devices .panel-b { overflow-x: auto; }
     .row { grid-template-columns: 24px minmax(140px, 1fr) 116px 140px 48px 84px 80px 80px 28px; column-gap: 8px; padding: 0 12px; min-width: 828px; }
   }
 

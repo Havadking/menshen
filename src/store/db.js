@@ -7,6 +7,12 @@ import { createLogger } from '../logger.js';
 const log = createLogger('store');
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
 
+// 自动合并：两个 MAC 同时在线累计超过这个时长，就认为是两台设备（比如家里两部同型号手机）。
+// 切换 2.4G/5G 时旧 MAC 最多残留「离线缓冲 + 路由器老化」约两分钟，留足余量。
+const AUTO_MERGE_MAX_OVERLAP_MS = 10 * 60_000;
+// 很多设备共用的主机名不能作为同一台设备的依据
+const GENERIC_HOSTNAMES = /^(iphone|ipad|ipod|android|localhost|unknown|null|\*)$/i;
+
 // 设备展示名：合并目标的自定义名 > 自己的自定义名 > 字典友好名 > 路由器上报名 > MAC
 const DEVICE_SELECT = `
   SELECT d.*,
@@ -24,6 +30,7 @@ function rowToDevice(r) {
     customName: r.custom_name,
     name: r.display_name,
     canonicalMac: r.canonical_mac,
+    mergeSource: r.merge_source ?? null,
     isRandomMac: !!r.is_random_mac,
     connType: r.conn_type,
     lastIp: r.last_ip,
@@ -91,6 +98,19 @@ export class Store {
       getSetting: db.prepare(`SELECT value FROM settings WHERE key = ?`),
       setSetting: db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
       prune: db.prepare(`DELETE FROM sessions WHERE ended_at IS NOT NULL AND ended_at < ?`),
+      rawDevice: db.prepare(`SELECT * FROM devices WHERE mac = ?`),
+      hasMembers: db.prepare(`SELECT 1 FROM devices WHERE canonical_mac = ? LIMIT 1`),
+      sameHostRandom: db.prepare(`SELECT * FROM devices WHERE router_name = ? AND mac <> ? AND is_random_mac = 1`),
+      groupMembers: db.prepare(`SELECT mac FROM devices WHERE mac = @root OR canonical_mac = @root`),
+      // 两组 MAC 的会话同时在线的累计时长；未结束的会话以最后一次见到为终点
+      overlapMs: db.prepare(`
+        SELECT COALESCE(SUM(MIN(COALESCE(a.ended_at, a.last_seen_at), COALESCE(b.ended_at, b.last_seen_at))
+                            - MAX(a.started_at, b.started_at)), 0) AS ms
+        FROM sessions a JOIN sessions b ON b.mac IN (SELECT value FROM json_each(@group))
+        WHERE a.mac = @mac
+          AND a.started_at < COALESCE(b.ended_at, b.last_seen_at)
+          AND b.started_at < COALESCE(a.ended_at, a.last_seen_at)`),
+      setAutoMerge: db.prepare(`UPDATE devices SET canonical_mac = ?, merge_source = 'auto' WHERE mac = ?`),
     };
     this.tx = {
       touchMany: db.transaction((rows) => {
@@ -198,10 +218,68 @@ export class Store {
       if (target && this.q.getDevice.get(target).canonical_mac) throw new Error('合并目标本身已被合并，请选择最终设备');
       sets.push('canonical_mac = @canonicalMac');
       params.canonicalMac = target;
+      // 用户改过合并关系（包括取消自动合并）就以用户为准，之后不再自动合并这台设备
+      const current = this.q.rawDevice.get(mac);
+      if (current && (current.canonical_mac ?? null) !== target) sets.push(`merge_source = 'manual'`);
     }
     if (!sets.length) return this.getDevice(mac);
     const info = this.db.prepare(`UPDATE devices SET ${sets.join(', ')} WHERE mac = @mac`).run(params);
     return info.changes ? this.getDevice(mac) : null;
+  }
+
+  // ---------- 自动合并 ----------
+
+  /**
+   * 手机的私有（随机）MAC 按网络生成，2.4G 和 5G 分成两个 SSID 时同一部手机会有两个 MAC，
+   * 但上报的主机名相同。满足以下条件时把 mac 自动合并到同主机名的逻辑设备：
+   * 双方都是随机 MAC、主机名不是 iPhone 这类通用名、mac 自己没被用户手动处理过也没有成员、
+   * 目标组当前没有成员在线（busy）、历史上两边同时在线累计不超过阈值。
+   * 同名的多个组中优先有自定义名的，其次最早出现的；mac 自己排名更靠前时不合并（等对方来合并）。
+   * @returns {string|null} 合并目标 MAC
+   */
+  autoMerge(mac, { busy = new Set() } = {}) {
+    const me = this.q.rawDevice.get(mac);
+    if (!me || !me.is_random_mac || me.canonical_mac || me.merge_source === 'manual') return null;
+    if (!me.router_name || GENERIC_HOSTNAMES.test(me.router_name)) return null;
+    if (this.q.hasMembers.get(mac)) return null;
+
+    const rank = (d) => [d.custom_name ? 0 : 1, d.first_seen_at, d.mac];
+    const before = (a, b) => {
+      const ra = rank(a), rb = rank(b);
+      for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] < rb[i];
+      return false;
+    };
+
+    const roots = new Map();
+    for (const peer of this.q.sameHostRandom.all(me.router_name, mac)) {
+      const rootMac = peer.canonical_mac ?? peer.mac;
+      if (roots.has(rootMac)) continue;
+      const root = rootMac === peer.mac ? peer : this.q.rawDevice.get(rootMac);
+      // 用户明确拆出来的独立设备不当作目标
+      if (!root || root.canonical_mac || root.merge_source === 'manual') continue;
+      roots.set(rootMac, root);
+    }
+
+    const candidates = [...roots.values()].filter((r) => before(r, me)).sort((a, b) => (before(a, b) ? -1 : 1));
+    for (const root of candidates) {
+      const group = this.q.groupMembers.all({ root: root.mac }).map((r) => r.mac);
+      if (group.some((m) => busy.has(m))) continue;
+      if (this.q.overlapMs.get({ mac, group: JSON.stringify(group) }).ms > AUTO_MERGE_MAX_OVERLAP_MS) continue;
+      this.q.setAutoMerge.run(root.mac, mac);
+      log.info(`自动合并 ${mac} → ${root.mac}（主机名 ${me.router_name}）`);
+      return root.mac;
+    }
+    return null;
+  }
+
+  /** 对库中全部设备跑一遍自动合并（启动时执行，处理历史数据）；返回合并数 */
+  autoMergeAll() {
+    const macs = this.db.prepare(`SELECT mac FROM devices WHERE is_random_mac = 1 AND canonical_mac IS NULL ORDER BY first_seen_at DESC`).all();
+    let n = 0;
+    this.db.transaction(() => {
+      for (const { mac } of macs) if (this.autoMerge(mac)) n++;
+    })();
+    return n;
   }
 
   // ---------- sessions ----------

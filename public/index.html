@@ -377,7 +377,8 @@
             <option value="">不合并（独立设备）</option>
             <option v-for="d in mergeTargets" :key="d.mac" :value="d.mac">{{ d.name }} · {{ d.mac }}</option>
           </select>
-          <div class="hint">随机 MAC 的手机可以合并到同一台逻辑设备，统计与展示名会跟随目标设备</div>
+          <div v-if="drawer.canonicalMac && drawer.mergeSource === 'auto'" class="hint">主机名相同的随机 MAC 已自动合并（同一手机连 2.4G / 5G 时地址不同）；认错了就选「不合并」，之后不会再自动合并它</div>
+          <div v-else class="hint">随机 MAC 的手机可以合并到同一台逻辑设备，统计与展示名会跟随目标设备</div>
         </div>
         <div v-if="drawerError" class="err">{{ drawerError }}</div>
         <div class="field">

@@ -95,3 +95,63 @@ test('devicelist 归一化', () => {
   assert.equal(connTypeOf({ type: { type: 'wifi', wifiIndex: 1 } }), '2.4g');
   assert.equal(normalizeDevice({ mac: 'x', online: 0 }).online, false);
 });
+
+test('随机 MAC 同主机名自动合并：优先有自定义名的，其次最早出现的', () => {
+  const store = new Store(':memory:');
+  const C = 'AA:BB:CC:00:00:03';
+  store.seenDevice({ mac: A, routerName: 'realme-GT5-Pro', isRandomMac: true, now: 1000 });
+  store.seenDevice({ mac: B, routerName: 'realme-GT5-Pro', isRandomMac: true, now: 2000 });
+  store.seenDevice({ mac: C, routerName: 'realme-GT5-Pro', isRandomMac: true, now: 3000 });
+  store.updateDevice(B, { customName: '我的手机' });
+  assert.equal(store.autoMergeAll(), 2);
+  assert.equal(store.getDevice(A).canonicalMac, B);
+  assert.equal(store.getDevice(C).canonicalMac, B);
+  assert.equal(store.getDevice(A).name, '我的手机');
+  assert.equal(store.getDevice(A).mergeSource, 'auto');
+  assert.equal(store.getDevice(B).canonicalMac, null);
+});
+
+test('自动合并不处理固定 MAC、通用主机名、长时间同时在线的设备', () => {
+  const store = new Store(':memory:');
+  const F1 = '00:11:22:00:00:01', F2 = '00:11:22:00:00:02';
+  store.seenDevice({ mac: F1, routerName: 'lamp', isRandomMac: false, now: 1000 });
+  store.seenDevice({ mac: F2, routerName: 'lamp', isRandomMac: false, now: 2000 });
+  store.seenDevice({ mac: A, routerName: 'iPhone', isRandomMac: true, now: 1000 });
+  store.seenDevice({ mac: B, routerName: 'iPhone', isRandomMac: true, now: 2000 });
+  assert.equal(store.autoMergeAll(), 0);
+
+  // 两部同型号手机：同时在线一小时，不是同一台
+  const C = 'AA:BB:CC:00:00:03', D = 'AA:BB:CC:00:00:04';
+  store.seenDevice({ mac: C, routerName: 'Redmi-K50', isRandomMac: true, now: 0 });
+  store.seenDevice({ mac: D, routerName: 'Redmi-K50', isRandomMac: true, now: 1 });
+  store.closeSession(store.openSession({ mac: C, ip: null, startedAt: 0 }), { endedAt: 3_600_000 });
+  store.closeSession(store.openSession({ mac: D, ip: null, startedAt: 60_000 }), { endedAt: 3_600_000 });
+  assert.equal(store.autoMerge(D), null);
+
+  // 切频段：旧 MAC 离开后新 MAC 才出现，会合并
+  const E = 'AA:BB:CC:00:00:05', F = 'AA:BB:CC:00:00:06', G = 'AA:BB:CC:00:00:07';
+  store.seenDevice({ mac: E, routerName: 'OPPO-A11', isRandomMac: true, now: 0 });
+  store.seenDevice({ mac: F, routerName: 'OPPO-A11', isRandomMac: true, now: 1 });
+  store.closeSession(store.openSession({ mac: E, ip: null, startedAt: 0 }), { endedAt: 60_000 });
+  store.openSession({ mac: F, ip: null, startedAt: 61_000 });
+  assert.equal(store.autoMerge(F), E);
+  // 目标组有成员正在线时不合并
+  store.seenDevice({ mac: G, routerName: 'OPPO-A11', isRandomMac: true, now: 2 });
+  assert.equal(store.autoMerge(G, { busy: new Set([F]) }), null);
+});
+
+test('用户取消自动合并后不再自动合并，只改名不算改合并', () => {
+  const store = new Store(':memory:');
+  store.seenDevice({ mac: A, routerName: 'phone', isRandomMac: true, now: 1000 });
+  store.seenDevice({ mac: B, routerName: 'phone', isRandomMac: true, now: 2000 });
+  assert.equal(store.autoMerge(B), A);
+  store.updateDevice(B, { customName: '手机', canonicalMac: A });
+  assert.equal(store.getDevice(B).mergeSource, 'auto');
+  store.updateDevice(B, { canonicalMac: null });
+  assert.equal(store.getDevice(B).mergeSource, 'manual');
+  assert.equal(store.autoMerge(B), null);
+  // 被拆出来的设备也不作为别人的目标
+  const C = 'AA:BB:CC:00:00:03';
+  store.seenDevice({ mac: C, routerName: 'phone', isRandomMac: true, now: 3000 });
+  assert.equal(store.autoMerge(C), A);
+});

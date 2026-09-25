@@ -171,3 +171,40 @@ test('随机 MAC 会被标记', () => {
   assert.equal(store.getDevice('6A:11:22:33:44:55').isRandomMac, true);
   assert.equal(store.getDevice('00:11:22:33:44:56').isRandomMac, false);
 });
+
+test('手机切换 2.4G/5G 换了随机 MAC：自动合并为一台，切换不弹提醒', () => {
+  const { store, engine, events, clock, ok } = setup();
+  const R1 = 'AA:BB:CC:00:01:01', R2 = 'AA:BB:CC:00:01:02';
+  const phone = (mac, connType) => dev(mac, { name: 'realme-GT5-Pro', connType });
+  ok([phone(R1, '2.4g')]);
+  clock.tick(3000);
+  ok([]);                          // 旧 MAC 断开，进入离线观察
+  clock.tick(3000);
+  ok([phone(R2, '5g')]);           // 新 MAC 连上 5G
+  assert.equal(store.getDevice(R2).canonicalMac, R1);
+  const join = events.find((e) => e.e === 'join');
+  assert.equal(join.mac, R2);
+  assert.equal(join.notify, false);
+  assert.equal(engine.snapshot().devices.find((d) => d.mac === R2).canonicalMac, R1);
+
+  clock.tick(30_000);
+  ok([phone(R2, '5g')]);
+  const leave = events.find((e) => e.e === 'leave');
+  assert.equal(leave.mac, R1);
+  assert.equal(leave.notify, false);
+});
+
+test('新 MAC 上线时旧 MAC 仍在线：先不合并，旧的离开后再合并', () => {
+  const { store, clock, ok } = setup();
+  const R1 = 'AA:BB:CC:00:01:01', R2 = 'AA:BB:CC:00:01:02';
+  const phone = (mac) => dev(mac, { name: 'Redmi-K50' });
+  ok([phone(R1)]);
+  clock.tick(3000);
+  ok([phone(R1), phone(R2)]);
+  assert.equal(store.getDevice(R2).canonicalMac, null);
+  clock.tick(3000);
+  ok([phone(R2)]);
+  clock.tick(30_000);
+  ok([phone(R2)]);
+  assert.equal(store.getDevice(R2).canonicalMac, R1);
+});

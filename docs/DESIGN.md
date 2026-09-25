@@ -21,7 +21,7 @@
 | F3 | 设备档案 | 以 MAC 为主键维护设备信息：路由器上报名、自定义名、首次/最近出现时间、连接方式 |
 | F4 | 实时看板 | 在线设备表（名称、IP、MAC、在线时长、实时速率）、总览指标、事件时间线 |
 | F5 | 即时提醒 | 设备上/下线时 Web 端 Toast，可按设备关闭提醒 |
-| F6 | 随机 MAC 处理 | 标记疑似随机 MAC，支持手动把多个 MAC 合并为同一逻辑设备 |
+| F6 | 随机 MAC 处理 | 标记疑似随机 MAC；同主机名的随机 MAC 自动合并（2.4G/5G 分 SSID 时同一手机有两个私有地址），也支持手动合并/取消 |
 | F7 | 路由器不可达保护 | 路由器重启/超时时冻结状态，不产生误报离线 |
 
 ### 1.3 非目标
@@ -192,6 +192,7 @@ CREATE TABLE devices (
   router_name    TEXT,                        -- 路由器上报名（name/oname），每轮刷新
   custom_name    TEXT,                        -- 用户自定义名，优先展示
   canonical_mac  TEXT REFERENCES devices(mac),-- 合并到哪个逻辑设备；NULL = 自己
+  merge_source   TEXT,                        -- 'auto' 自动合并 / 'manual' 用户改过，不再自动处理
   is_random_mac  INTEGER NOT NULL DEFAULT 0,  -- 本地管理位（第2个十六进制位为 2/6/A/E）
   conn_type      TEXT,                        -- 'wired' | '2.4g' | '5g' | NULL
   last_ip        TEXT,

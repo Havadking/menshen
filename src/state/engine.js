@@ -192,9 +192,12 @@ export class StateEngine extends EventEmitter {
     const profile = this._profile(d, now);
     const sessionId = this.store.openSession({ mac: d.mac, ip: d.ip, startedAt, lastSeenAt: now, startSource: source });
     const t = this._track(d, now, { sessionId, startedAt, profile });
+    this._autoMerge(t);
+    // 同一逻辑设备的另一个 MAC 还在（比如手机从 2.4G 切到 5G），只是换了个口，不弹提醒
+    const handoff = this._hasPeer(t, () => true);
     const ev = {
       mac: d.mac, name: t.profile.name, ip: d.ip, connType: d.connType,
-      sessionId, ts: startedAt, source, notify: t.profile.notify,
+      sessionId, ts: startedAt, source, notify: t.profile.notify && !handoff,
     };
     log.info(`JOIN  ${ev.name} (${d.mac}) ${d.ip ?? ''} [${source}]`);
     if (!silent) this.emit('join', ev);
@@ -206,12 +209,36 @@ export class StateEngine extends EventEmitter {
     this.store.closeSession(t.sessionId, { endedAt, endSource: 'poll' });
     this.store.setDeviceOffline(t.mac);
     this.tracked.delete(t.mac);
+    const handoff = this._hasPeer(t, (p) => p.status === 'ONLINE');
     const ev = {
       mac: t.mac, name: t.profile.name, ip: t.ip, connType: t.connType,
-      sessionId: t.sessionId, durationMs: Math.max(0, endedAt - t.startedAt), ts: endedAt, notify: t.profile.notify,
+      sessionId: t.sessionId, durationMs: Math.max(0, endedAt - t.startedAt), ts: endedAt, notify: t.profile.notify && !handoff,
     };
     log.info(`LEAVE ${ev.name} (${t.mac}) 在线 ${Math.round(ev.durationMs / 1000)}s`);
     this.emit('leave', ev);
+    // 新 MAC 上线时旧 MAC 还没从路由器列表里消失，当时没合并成；旧的走了再试一次
+    for (const p of this.tracked.values()) {
+      if (p.routerName && p.routerName === t.routerName && !p.profile.canonicalMac) this._autoMerge(p);
+    }
+  }
+
+  // ---------- 自动合并 ----------
+
+  /** 按主机名把随机 MAC 并入同一逻辑设备（规则见 Store#autoMerge）；目标组有成员正在线时不合并 */
+  _autoMerge(t) {
+    if (!t.profile.isRandomMac || t.profile.canonicalMac) return;
+    const busy = new Set();
+    for (const p of this.tracked.values()) if (p !== t && p.status === 'ONLINE') busy.add(p.mac);
+    if (this.store.autoMerge(t.mac, { busy })) this.refreshProfile(t.mac);
+  }
+
+  /** 同一逻辑设备的其他 MAC 中是否有满足条件的 */
+  _hasPeer(t, pred) {
+    const key = t.profile.canonicalMac ?? t.mac;
+    for (const p of this.tracked.values()) {
+      if (p !== t && (p.profile.canonicalMac ?? p.mac) === key && pred(p)) return true;
+    }
+    return false;
   }
 
   // ---------- 档案 ----------

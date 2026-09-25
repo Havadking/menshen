@@ -21,6 +21,8 @@ async function main() {
   const store = new Store(config.store.path);
   const renamed = store.backfillFriendlyNames(friendlyName);
   if (renamed) log.info(`已为 ${renamed} 台设备更新友好名称`);
+  const merged = store.autoMergeAll();
+  if (merged) log.info(`已自动合并 ${merged} 个随机 MAC（同一手机的 2.4G / 5G 私有地址）`);
   const client = new RouterClient(config.router);
   const engine = new StateEngine(store, {
     leaveGraceMs: config.poll.leaveGraceMs,
